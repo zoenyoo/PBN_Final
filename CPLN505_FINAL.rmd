@@ -1,0 +1,298 @@
+---
+title: "Planning by Numbers Final"
+author: "Micah Epstein & Zoe Yoo"
+date: "4/3/2022"
+output: 
+  html_document:
+    toc: yes
+    toc_float: yes
+    code_folding: hide
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+
+library(dplyr);library(ggplot2);library(Hmisc);library(stargazer); library(htmlTable);library(kableExtra);library (gmodels);library(MASS);library(vcd);library(gridExtra);library(showtext);library(xtable);library(car);library(sf);library(sfnetworks); library(tidycensus);library(tidygraph);library(ggcorrplot);library(mlogit);library(AER);library(Hmisc)
+
+
+options(scipen=0)
+
+setwd("G:/My Drive/GrSchool/CPLN 505 Planning by Numbers/CPLN505_FINAL")
+
+
+palette <- c("#10142A", "#47E9B9", "#F55D60", "#71EA48", "#C148EA", "#EAC148" )
+viridisPalette <- c("#440154", "#73D055", "#F55D60", "#238A8D", "#FDE725")
+#palette5 <- c("#324376", "#586ba4", "#f5dd90", "#ee964b", "#f95738")
+palette4 <- c("#324376", "#586ba4", "#ee964b", "#f95738")
+palette5 <- c("#FFFDFC", "#FFD5C8", "#FFC6B5", "#FF8061", "#F95738")
+palette2 <- c("#324376", "#f95738")
+```
+
+# I. Data Preparation and Exploratory Analysis
+
+```{r acs, eval=FALSE}
+
+get_acs_csv <- function(yr1, variableList, nameList) {
+  
+  acs1 <- get_acs(geography = "tract",
+                   year = yr1,
+                   variables = variableList,
+                   geometry = TRUE,
+                   state  = "PA",
+                   county = "Philadelphia",
+                   output = "wide"
+  )
+  
+  acs_full <- acs1 %>% dplyr:: select(!ends_with("M")) #include this line to remove margins of error
+  names(acs_full) <- c("GEOID","NAME", nameList,"geometry")
+  #acs_full <- acs_full[order(acs_full$GEOID),]
+  #write.csv(acs_full, file=paste(deparse(substitute(variableList)), yr1,"-",yr2, ".csv")) #include this line to export a csv
+  return(acs_full)
+}
+
+#use this line to look at acs variables
+#variables19_5 <- load_variables(year = 2019,dataset = "acs5")
+
+
+variableList <- c("B01001_001", #total population
+              "B01001_002", #total male
+              "B01001_026", #total female
+              "B02001_002", #white alone
+              "B02001_003", #black alone
+              "B02001_004", #AmIn/AlNative alone
+              "B02001_005", #Asian alone
+              "B02001_006", #Native hawaiian/PI alone
+              "B02001_007", #some other race alone
+              "B02001_008", #two plus races
+              "B03003_003", #total Hispanic or Latino
+              "B05009_001", #under 18 years B05009_001 for 2010, B09001_001 for 2019
+              "B15001_001", #18 years + B15001_001 for 2010, B09021_001 for 2019
+              "B11003_001", #families with children under 18
+              "B08301_001", #workers
+              "B08301_002", #means of transportation to work: car
+              "B08301_010", #means of transportation to work: public transit
+              "B08301_018", #means of transportation to work: bicycle
+              "B08301_019", #means of transportation to work: walked
+              "B08301_021", #means of transportation to work: wfh
+              "B19013_001", #median income
+              "B17001_002", #Income in the past 12 months below poverty level
+              "B17001_031", #Income in the past 12 months at or above poverty level
+              "B25064_001", #median gross rent
+              "B25003_002", #owner occupied
+              "B25003_003" #renter occupied
+              )
+
+nameList <- c("pop",
+                "male",
+                "fem",
+                "white",
+                "black",
+                "native_am",
+                "asian",
+                "nh_pi",
+                "other",
+                "multi",
+                "hisp_lat",
+                "Under_18",
+                "Above_18",
+                "fam_child",
+                "workers",
+                "Car",
+                "Transit",
+                "Bicycle",
+                "Walking",
+                "WFH",
+                "mdn_inc",
+                "blw_pov",
+                "abv_pov",
+                "med_rent",
+              "own",
+              "rent")
+
+acs_data <- get_acs_csv(2019,variableList, nameList)
+# add percentages
+acs_data <- acs_data %>% 
+  mutate(PCT_m = male/pop,
+         PCT_f = fem/pop,
+         PCT_wht = white/pop,
+         PCT_blk = black/pop,
+         PCT_na = native_am/pop,
+         PCT_asn = asian/pop,
+         PCT_pi = nh_pi/pop,
+         PCT_oth = other/pop,
+         PCT_mlt = multi/pop,
+         PCT_hsp = hisp_lat/pop,
+         PCT_car = Car/workers,
+         PCT_trn = Transit/workers,
+         PCT_bik = Bicycle/workers,
+         PCT_wlk = Walking/workers,
+         PCT_wfh = WFH/workers,
+         PCT_pov = blw_pov/pop,
+         PCT_own = own/pop,
+         PCT_rent = rent/pop)
+
+acs_data <- st_transform(acs_data,crs=4326)
+
+#this line writes the data to a shapefile
+st_write(acs_data,"G:/My Drive/GrSchool/CPLN 505 Planning by Numbers/CPLN505_FINAL/data/acs.shp", driver="ESRI Shapefile", append=FALSE)
+
+```
+
+
+```{r 311_hin, eval=FALSE}
+# may have to run the data reading lines in the console
+all311 <- read_sf("./data/311_2019/public_cases_fc.shp")
+
+m311 <- all311 %>% filter(service_na %in%
+                            c("Abandoned Vehicle",
+                              "Complaint (Streets)",
+                              "Dangerous Sidewalk",
+                              "Line Striping",
+                              "Other (Streets)",
+                              "Right of Way Unit",
+                              "Right of Way",
+                              "Salting",
+                              "Stop Sign Repair",
+                              "Street Defect",
+                              "Street Paving",
+                              "Street Trees",
+                              "Traffic (Other)",
+                              "Traffic Signal Emergency"))
+
+write.csv(m311, file="./data/m311.csv")
+
+hin <- read_sf("./data/high_injury_network_2020.shp")
+streets <- read_sf("./data/CompleteStreets.shp")
+ip <- read_sf("./data/intersection_polygons_clip.shp")
+
+crash <- read_sf("./data/COLLISION_CRASH_2016_2020.shp")
+crash_fatal <- crash %>% filter(FATAL_COUN > 0)
+crash_injury <- crash %>% filter(INJURY_COU > 0)
+
+ip2 <- ip %>% 
+  mutate(all311 = lengths(st_intersects(.,all311)),
+         m311 = lengths(st_intersects(.,m311)),
+         hin_c=lengths(st_intersects(.,hin)),
+         hin = as.numeric(if_else(hin_count > 0, "1", "0")),
+         crsh_c=lengths(st_intersects(.,crash)),
+         fatal =as.numeric(if_else(lengths(st_intersects(.,crash_fatal)) > 0, "1", "0")),
+         fatal_c =lengths(st_intersects(.,crash_fatal)),
+         inj = if_else(lengths(st_intersects(.,crash_injury)) > 0, "1", "0"),
+         inj_c = lengths(st_intersects(.,crash_injury))
+         )
+st_write(ip2,"G:/My Drive/GrSchool/CPLN 505 Planning by Numbers/CPLN505_FINAL/data/ip.shp", driver="ESRI Shapefile", append=FALSE)
+
+#ip <- st_join(ip,streets,join=st_intersects)
+#this line joins polygons to acs data, but takes too long so just do this in GIS
+#ip <- st_join(ip,acs_data,join=st_intersects, largest=TRUE)
+
+#write.csv(ip_join, file="./data/ip_join.csv")
+
+```
+
+
+```{r prep}
+
+hin <- read_sf("./data/high_injury_network_2020.shp")
+streets <- read_sf("./data/CompleteStreets.shp")
+ip <- read_sf("./data/intersection_polygons_clip.shp")
+m311 <- read_sf("./data/m311.csv")
+
+dat <- read_sf("./data/ip_acs_join.shp")
+
+dat <- dat %>% 
+  mutate(hin1 = as.numeric(hin),
+         fatal1=as.numeric(fatal),
+         injury1=as.numeric(injury))
+
+ggplot() +
+  geom_point(data = m311, aes(x = lon, y = lat), alpha = .05)
+
+ggplot()+
+  geom_sf(data=dat, show.legend = NA, color = palette5[5], size=0.25)
+
+
+
+plot(dat$Car ,dat$crsh_cn)
+
+
+
+```
+
+```{r expl}
+
+dat %>% st_drop_geometry() %>% 
+    select_if(., is.numeric) %>% 
+    stargazer(type="html", title="Summary Table of Continuous Variables",   
+          single.row = TRUE, digits=1)
+
+
+
+```
+
+# II. Correlation Tests
+
+```{r corr}
+
+numericVars <-
+  select_if(dat %>% st_drop_geometry(), is.numeric) %>%
+  select(Join_Count, all311_, m311_cn, hin1, hin_cnt, crsh_cn, fatal1, fatal_c, injury1, injry_c, Ttl_Ppl, starts_with("PCT")) %>%
+  na.omit()
+
+ggcorrplot(  #correlation plot
+          round(cor(numericVars), 1),
+          p.mat = cor_pmat(numericVars),
+          show.diag = TRUE,
+          lab = TRUE,
+          colors = c("#08519c", "white", "#FA342A"),
+          type="lower",
+          insig = "blank") +
+          labs(title = "Correlations of Demographic Data, HIN Data, and 311 Data",
+               subtitle = "Intersection Polygons, Philadelphia, PA")
+
+```
+
+```{r}
+
+#backward stepwise regression
+test_mod <- glm(hin1 ~ .,
+            data = dat %>% st_drop_geometry(),
+            family="binomial" (link="logit"))
+
+drop1(test_mod, test="Chisq")
+
+
+```
+
+
+# III. Binary & Multinomial? Logit
+
+```{r binomial_logit}
+
+
+
+ggplot(data=dat, aes(x=all311_,y=m311_cn))+
+  geom_point()
+
+
+hist(log(dat$m311_cn))
+```
+
+
+
+```{r bl1}
+
+hinMod1 <- glm(hin1 ~ ,
+               data=dat %>% st_drop_geometry(),
+               family="binomial" (link="logit"))
+
+
+
+high311Mod1 <- glm(hin1 ~ ,
+               data=dat %>% st_drop_geometry(),
+               family="binomial" (link="logit"))
+
+
+logm311Mod1
+
+```
