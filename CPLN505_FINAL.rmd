@@ -17,8 +17,7 @@ library(dplyr);library(ggplot2);library(Hmisc);library(stargazer); library(htmlT
 
 options(scipen=0)
 
-setwd("G:/My Drive/GrSchool/CPLN 505 Planning by Numbers/CPLN505_FINAL")
-
+setwd("G:/My Drive/GrSchool/CPLN 505 Planning by Numbers/PBN_Final")
 
 palette <- c("#10142A", "#47E9B9", "#F55D60", "#71EA48", "#C148EA", "#EAC148" )
 viridisPalette <- c("#440154", "#73D055", "#F55D60", "#238A8D", "#FDE725")
@@ -134,14 +133,13 @@ acs_data <- acs_data %>%
 acs_data <- st_transform(acs_data,crs=4326)
 
 #this line writes the data to a shapefile
-st_write(acs_data,"G:/My Drive/GrSchool/CPLN 505 Planning by Numbers/CPLN505_FINAL/data/acs.shp", driver="ESRI Shapefile", append=FALSE)
+st_write(acs_data,"./data/acs.shp", driver="ESRI Shapefile", append=FALSE)
 
 ```
 
 
 ```{r 311_hin, eval=FALSE}
-# may have to run the data reading lines in the console
-all311 <- read_sf("./data/311_2019/public_cases_fc.shp")
+all311 <- read_sf("./data/311_2019_allSelected.shp")
 
 m311 <- all311 %>% filter(service_na %in%
                             c("Abandoned Vehicle",
@@ -159,7 +157,7 @@ m311 <- all311 %>% filter(service_na %in%
                               "Traffic (Other)",
                               "Traffic Signal Emergency"))
 
-write.csv(m311, file="./data/m311.csv")
+st_write(m311,"./data/m311.shp", driver="Esri Shapefile", append=FALSE)
 
 hin <- read_sf("./data/high_injury_network_2020.shp")
 streets <- read_sf("./data/CompleteStreets.shp")
@@ -173,17 +171,17 @@ ip2 <- ip %>%
   mutate(all311 = lengths(st_intersects(.,all311)),
          m311 = lengths(st_intersects(.,m311)),
          hin_c=lengths(st_intersects(.,hin)),
-         hin = as.numeric(if_else(hin_count > 0, "1", "0")),
+         hin = as.numeric(if_else(hin_c > 0, "1", "0")),
          crsh_c=lengths(st_intersects(.,crash)),
          fatal =as.numeric(if_else(lengths(st_intersects(.,crash_fatal)) > 0, "1", "0")),
          fatal_c =lengths(st_intersects(.,crash_fatal)),
-         inj = if_else(lengths(st_intersects(.,crash_injury)) > 0, "1", "0"),
+         inj = as.numeric(if_else(lengths(st_intersects(.,crash_injury)) > 0, "1", "0")),
          inj_c = lengths(st_intersects(.,crash_injury))
          )
-st_write(ip2,"G:/My Drive/GrSchool/CPLN 505 Planning by Numbers/CPLN505_FINAL/data/ip.shp", driver="ESRI Shapefile", append=FALSE)
+st_write(ip2,"./data/ip.shp", driver="ESRI Shapefile", append=FALSE)
 
 #ip <- st_join(ip,streets,join=st_intersects)
-#this line joins polygons to acs data, but takes too long so just do this in GIS
+#this line joins polygons to acs data, but takes too long so just do this via spatial join in GIS
 #ip <- st_join(ip,acs_data,join=st_intersects, largest=TRUE)
 
 #write.csv(ip_join, file="./data/ip_join.csv")
@@ -193,40 +191,40 @@ st_write(ip2,"G:/My Drive/GrSchool/CPLN 505 Planning by Numbers/CPLN505_FINAL/da
 
 ```{r prep}
 
-hin <- read_sf("./data/high_injury_network_2020.shp")
-streets <- read_sf("./data/CompleteStreets.shp")
-ip <- read_sf("./data/intersection_polygons_clip.shp")
-m311 <- read_sf("./data/m311.csv")
-
 dat <- read_sf("./data/ip_acs_join.shp")
 
+dat <- select(dat, -c(TARGET_FID, Id, Input_FID, OBJECTID, NODE_ID))
+
 dat <- dat %>% 
-  mutate(hin1 = as.numeric(hin),
-         fatal1=as.numeric(fatal),
-         injury1=as.numeric(injury))
+  mutate(hm311 = as.numeric(if_else(m311 > 3, "1", "0")),
+         logm311 = log(m311))
+#only need these if mapping
+# hin <- read_sf("https://github.com/zoenyoo/PBN_Final/raw/main/data/hin.geojson")
+# streets <- read_sf("https://github.com/zoenyoo/PBN_Final/raw/main/data/CompleteStreets.geojson")
+# ip <- read_sf("https://github.com/zoenyoo/PBN_Final/raw/main/data/intersection_polygons_clip.geojson")
+# m311 <- read_sf("https://github.com/zoenyoo/PBN_Final/raw/main/data/m311.geojson")
 
-ggplot() +
-  geom_point(data = m311, aes(x = lon, y = lat), alpha = .05)
-
-ggplot()+
-  geom_sf(data=dat, show.legend = NA, color = palette5[5], size=0.25)
-
-
-
-plot(dat$Car ,dat$crsh_cn)
-
+# ggplot() +
+#   geom_point(data = m311, aes(x = lon, y = lat), alpha = .05)
+# 
+# ggplot()+
+#   geom_sf(data=dat, show.legend = NA, color = palette5[5], size=0.25)
 
 
 ```
 
-```{r expl}
+```{r expl, results = "asis"}
 
 dat %>% st_drop_geometry() %>% 
     select_if(., is.numeric) %>% 
     stargazer(type="html", title="Summary Table of Continuous Variables",   
           single.row = TRUE, digits=1)
 
+plot(dat$Car ,dat$crsh_cn)
 
+
+ggplot(data=dat, aes(x=all311,y=m311))+
+  geom_point()
 
 ```
 
@@ -236,7 +234,7 @@ dat %>% st_drop_geometry() %>%
 
 numericVars <-
   select_if(dat %>% st_drop_geometry(), is.numeric) %>%
-  select(Join_Count, all311_, m311_cn, hin1, hin_cnt, crsh_cn, fatal1, fatal_c, injury1, injry_c, Ttl_Ppl, starts_with("PCT")) %>%
+  select(Join_Count, all311, m311, hin, hin_c, crsh_c, fatal, fatal_c, inj, inj_c, pop, starts_with("PCT")) %>%
   na.omit()
 
 ggcorrplot(  #correlation plot
@@ -252,14 +250,14 @@ ggcorrplot(  #correlation plot
 
 ```
 
-```{r}
+```{r stepwise}
 
 #backward stepwise regression
-test_mod <- glm(hin1 ~ .,
-            data = dat %>% st_drop_geometry(),
-            family="binomial" (link="logit"))
+# test_mod <- glm(hin ~ .,
+#             data = dat %>% st_drop_geometry(),
+#             family="binomial" (link="logit"))
 
-drop1(test_mod, test="Chisq")
+# drop1(test_mod, test="Chisq")
 
 
 ```
@@ -269,30 +267,49 @@ drop1(test_mod, test="Chisq")
 
 ```{r binomial_logit}
 
+hist(dat$logm311)
 
 
-ggplot(data=dat, aes(x=all311_,y=m311_cn))+
-  geom_point()
-
-
-hist(log(dat$m311_cn))
 ```
 
+## High Injury Networks
 
+```{r hin_bl, results = "asis"}
 
-```{r bl1}
-
-hinMod1 <- glm(hin1 ~ ,
+hinMod1 <- glm(hin ~ crsh_c + inj_c + PCT_own + all311 + m311,
                data=dat %>% st_drop_geometry(),
                family="binomial" (link="logit"))
 
 
-
-high311Mod1 <- glm(hin1 ~ ,
+hinMod2 <- glm(hin ~ crsh_c + inj_c + PCT_own,
                data=dat %>% st_drop_geometry(),
                family="binomial" (link="logit"))
 
+stargazer(hinMod1, hinMod2,
+          type="html", title="Agricultural/pasture/forest land-to-urban land use change",   
+          column.labels = c("Model 1", "Model 2"),
+          single.row = TRUE, digits=2)
 
-logm311Mod1
+```
+
+## High Mobility 311 Case Intersections
+
+```{r high_311_bl}
+
+# high311Mod1 <- glm(hm311 ~ ,
+#                data=dat %>% st_drop_geometry(),
+#                family="binomial" (link="logit"))
+
+
+```
+
+## 
+
+```{r log311_bl}
+
+# logm311Mod1 <- glm(logm311 ~ ,
+#                data=dat %>% st_drop_geometry(),
+#                family="binomial" (link="logit"))
+
 
 ```
