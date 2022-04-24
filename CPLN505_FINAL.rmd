@@ -121,6 +121,7 @@ acs_data <- acs_data %>%
          PCT_oth = other/pop,
          PCT_mlt = multi/pop,
          PCT_hsp = hisp_lat/pop,
+         PCT_chld = Under_18/pop,
          PCT_car = Car/workers,
          PCT_trn = Transit/workers,
          PCT_bik = Bicycle/workers,
@@ -128,7 +129,9 @@ acs_data <- acs_data %>%
          PCT_wfh = WFH/workers,
          PCT_pov = blw_pov/pop,
          PCT_own = own/pop,
-         PCT_rent = rent/pop)
+         PCT_rent = rent/pop,
+         maj_wht = if_else(PCT_wht > 0.50, 1, 0),
+         maj_blk = if_else(PCT_blk > 0.50, 1, 0))
 
 acs_data <- st_transform(acs_data,crs=4326)
 
@@ -171,11 +174,11 @@ ip2 <- ip %>%
   mutate(all311 = lengths(st_intersects(.,all311)),
          m311 = lengths(st_intersects(.,m311)),
          hin_c=lengths(st_intersects(.,hin)),
-         hin = as.numeric(if_else(hin_c > 0, "1", "0")),
+         hin = if_else(hin_c > 0, 1,0),
          crsh_c=lengths(st_intersects(.,crash)),
-         fatal =as.numeric(if_else(lengths(st_intersects(.,crash_fatal)) > 0, "1", "0")),
+         fatal =if_else(lengths(st_intersects(.,crash_fatal)) > 0, 1, 0),
          fatal_c =lengths(st_intersects(.,crash_fatal)),
-         inj = as.numeric(if_else(lengths(st_intersects(.,crash_injury)) > 0, "1", "0")),
+         inj = if_else(lengths(st_intersects(.,crash_injury)) > 0, 1,0),
          inj_c = lengths(st_intersects(.,crash_injury))
          )
 st_write(ip2,"./data/ip.shp", driver="ESRI Shapefile", append=FALSE)
@@ -196,8 +199,11 @@ dat <- read_sf("./data/ip_acs_join.shp")
 dat <- select(dat, -c(TARGET_FID, Id, Input_FID, OBJECTID, NODE_ID))
 
 dat <- dat %>% 
-  mutate(hm311 = as.numeric(if_else(m311 > 3, "1", "0")),
-         logm311 = log(m311))
+  mutate(maj_wht = if_else(PCT_wht > 0.50, 1, 0),
+         maj_blk = if_else(PCT_blk > 0.50, 1, 0),
+         lm311 = as.numeric(if_else(m311 < 4, 1, 0)),
+         logm311 = log(m311),
+         PCT_chld = Under_18/pop)
 #only need these if mapping
 # hin <- read_sf("https://github.com/zoenyoo/PBN_Final/raw/main/data/hin.geojson")
 # streets <- read_sf("https://github.com/zoenyoo/PBN_Final/raw/main/data/CompleteStreets.geojson")
@@ -220,7 +226,7 @@ dat %>% st_drop_geometry() %>%
     stargazer(type="html", title="Summary Table of Continuous Variables",   
           single.row = TRUE, digits=1)
 
-plot(dat$Car ,dat$crsh_cn)
+plot(dat$Car ,dat$crsh_c)
 
 
 ggplot(data=dat, aes(x=all311,y=m311))+
@@ -253,15 +259,23 @@ ggcorrplot(  #correlation plot
 ```{r stepwise}
 
 #backward stepwise regression
-# test_mod <- glm(hin ~ .,
-#             data = dat %>% st_drop_geometry(),
-#             family="binomial" (link="logit"))
+hin_test <- glm(hin ~ pop + mdn_inc + med_rent + workers + PCT_f + PCT_wht + maj_wht + PCT_blk + maj_blk + PCT_asn + PCT_na + PCT_pi + PCT_oth + PCT_mlt + PCT_hsp + PCT_car + PCT_trn + PCT_bik + PCT_wlk + PCT_wfh + PCT_own + PCT_pov + PCT_chld + all311 + m311,
+            data = dat %>% st_drop_geometry(),
+            family="binomial" (link="logit"))
 
-# drop1(test_mod, test="Chisq")
+lm311_test <- glm(lm311 ~ pop + mdn_inc + med_rent + workers + PCT_f + PCT_wht + maj_wht + PCT_blk + maj_blk + PCT_asn + PCT_na + PCT_pi + PCT_oth + PCT_mlt + PCT_hsp + PCT_car + PCT_trn + PCT_bik + PCT_wlk + PCT_wfh + PCT_own + PCT_pov + PCT_chld,
+            data = dat %>% st_drop_geometry(),
+            family="binomial" (link="logit"))
 
+drop1(hin_test, test="Chisq")
 
+step(lm311_test, direction="backward")
+#step(hin_test, direction="backward")
+
+anova(hin_test, test="Chisq")
 ```
-
+Using our test model, we 
+Based on AIC values, it appears that mobility-related 311 cases do not improve the model particularly 
 
 # III. Binary & Multinomial? Logit
 
@@ -276,29 +290,70 @@ hist(dat$logm311)
 
 ```{r hin_bl, results = "asis"}
 
-hinMod1 <- glm(hin ~ crsh_c + inj_c + PCT_own + all311 + m311,
+cor.test(dat$maj_wht,dat$maj_blk)
+
+cor.test(dat$PCT_car, dat$PCT_trn)
+cor.test(dat$PCT_bik, dat$PCT_wlk)
+
+#our honed model
+hinMod1 <- glm(hin ~ med_rent + maj_blk + PCT_car + PCT_bik + PCT_own + m311,
                data=dat %>% st_drop_geometry(),
                family="binomial" (link="logit"))
 
-
-hinMod2 <- glm(hin ~ crsh_c + inj_c + PCT_own,
+#model based on backwards stepwise
+hinMod2 <- glm(mdn_inc + med_rent + PCT_f + PCT_blk + PCT_asn + 
+    PCT_oth + PCT_hsp + PCT_car + PCT_trn + PCT_bik + PCT_wfh + 
+    PCT_own + PCT_chld + all311 + m311,
                data=dat %>% st_drop_geometry(),
                family="binomial" (link="logit"))
 
-stargazer(hinMod1, hinMod2,
-          type="html", title="Agricultural/pasture/forest land-to-urban land use change",   
+#model just using crash and injury/fatal data
+hinMod3 <- glm(hin ~ crsh_c + inj_c + fatal_c,
+               data=dat %>% st_drop_geometry(),
+               family="binomial" (link="logit"))
+
+stargazer(hinMod1, hinMod2,hinMod3, 
+          type="html", title="High-Injury Network Intersections",   
           column.labels = c("Model 1", "Model 2"),
           single.row = TRUE, digits=2)
 
+data.frame(100*(exp(coef(hinMod1)))-1) %>% 
+  kable()
+
 ```
 
-## High Mobility 311 Case Intersections
+## Low Reporting of Mobility Cases
 
-```{r high_311_bl}
+```{r low_311_bl}
 
-# high311Mod1 <- glm(hm311 ~ ,
-#                data=dat %>% st_drop_geometry(),
-#                family="binomial" (link="logit"))
+l311Mod1 <- glm(lm311 ~ med_rent + maj_blk + PCT_car + PCT_bik + PCT_own + PCT_pov,
+               data=dat %>% st_drop_geometry(),
+               family="binomial" (link="logit"))
+
+l311Mod2 <- glm(formula = lm311 ~ mdn_inc + med_rent + workers + PCT_f + 
+    PCT_blk + maj_blk + PCT_hsp + PCT_trn + PCT_bik + PCT_wlk + 
+    PCT_wfh + PCT_own + PCT_pov + PCT_chld, family = binomial(link = "logit"), 
+    data = dat %>% st_drop_geometry())
+
+summary(l311Mod1)
+data.frame(100*(exp(coef(l311Mod1)))-1) %>% 
+  kable()
+
+```
+
+## "Gap" Intersections: Low Mobility-Related 311 Reporting and HIN
+
+```{r}
+
+summarize_all()
+
+dat1 <- filter(dat, m311>3 & hin==1)
+dat2 <- filter(dat, m311<=3 & hin==1)
+dat3 <- filter(dat, m311>3 & hin==0)
+
+dat1 %>% summarise(across(where(is.numeric), ~ mean(.x, na.rm = TRUE)))
+dat2 %>% summarise(across(where(is.numeric), ~ mean(.x, na.rm = TRUE)))
+dat3 %>% summarise(across(where(is.numeric), ~ mean(.x, na.rm = TRUE)))
 
 
 ```
