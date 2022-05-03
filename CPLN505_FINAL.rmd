@@ -1,5 +1,5 @@
 ---
-title: "Planning by Numbers Final"
+title: "Planning by Numbers Final: Safety-as-a-Service"
 author: "Micah Epstein & Zoe Yoo"
 date: "4/3/2022"
 output: 
@@ -8,7 +8,6 @@ output:
     toc_float: yes
     code_folding: hide
 ---
-
 ```{r setup, include=FALSE}
 knitr::opts_chunk$set(echo = TRUE)
 
@@ -30,7 +29,49 @@ palette5 <- c("#FFFDFC", "#FFD5C8", "#FFC6B5", "#FF8061", "#F95738")
 palette2 <- c("#324376", "#f95738")
 ```
 
-# I. Data Preparation and Exploratory Analysis
+# I. Introduction
+
+## Towards Understanding the Gap Between Reported Traffic Conditions and Actual Traffic Injuries
+
+For our final project, we wanted to examine how and whether 311 cases, and specifically mobility-related 311 cases, could be a useful predictor of a city's high-injury network. We use Philadelphia as our test city, as there is already a comprehensive high-injury network (HIN) defined and released by the city that we were able to easily analyze. High-injury networks are generally defined as streets that pose higher risk for accidents and injuries to occur, across all modes of transportation. Some cities discern high-injury networks for each mode, such as varying HINs for pedestrian or cyclist injuries, but Philadelphia's is meant to be comprehensive for all modes. According to the City of Philadelphia's Vision Zero Action Plan for 2025, 80% of injuries occur on just 12% of city streets; Philadelphia's high-injury network was formed around data on crash-related injuries and fatalities. 
+
+Our original idea for this project was to create a high-injury network for a city that doesn’t have one yet (Pittsburgh), and then compare it to qualitative (311) and demographic data to understand the value of citizen reporting and the injury burden on certain groups. However, we found that both defining and analyzing a HIN for a new city would not be achievable within the time frame, and moved to instead applying the project's initial idea for 311-related and demographic analysis to Philadelphia's already-established network. 
+
+**Lack of 311 calls suggest a low attachment to place: “Higher attachment with the space was associated with a greater motivation to enforce local social norms and benefit the broader community.” [1]** **ADD MORE ABT OBRIEN STUDY HERE**
+
+We define mobility-related 311 cases as those that relate to street conditions.
+
+```{r}
+
+df <- tibble(
+  mobility = c("Abandoned Vehicle",
+                              "Complaint (Streets)",
+                              "Dangerous Sidewalk",
+                              "Line Striping",
+                              "Other (Streets)",
+                              "Right of Way Unit",
+                              "Right of Way",
+                              "Salting",
+                              "Stop Sign Repair",
+                              "Street Defect",
+                              "Street Paving",
+                              "Street Trees",
+                              "Traffic (Other)",
+                              "Traffic Signal Emergency"))
+
+
+kable(df,
+      caption="311 Cases Classified as Mobility Cases")
+```
+
+In this study, we explore the correlations between demographic data, 311 cases, and the presence of high-injury networks, and develop predictive models for metrics around these networks.
+
+
+# II. Data Preparation and Exploratory Analysis
+
+## Data
+
+To examine demographic data, we utilize 2019 American Community Survey 5-Year estimates for census tracts. 311 Data is also pulled from 2019.
 
 ```{r acs, eval=FALSE}
 
@@ -38,7 +79,7 @@ palette2 <- c("#324376", "#f95738")
 
 get_acs_csv <- function(yr1, variableList, nameList) {
   
-  acs1 <- get_acs(geography = "block group",
+  acs1 <- get_acs(geography = "tract",
                    year = yr1,
                    variables = variableList,
                    geometry = TRUE,
@@ -145,6 +186,13 @@ st_write(acs_data,"./data/acs_bg.shp", driver="ESRI Shapefile", append=FALSE)
 
 ```
 
+## Spatial Structure
+
+Because we need to combine 311 data, which is point data, ACS data, which is formatted in polygons, and HIN and street data, which is made up of lines (that cross many ACS polygons), we had to consider the best way to integrate both forms. We decided to evaluate HINs through street intersections; to transform the street network into polygons, we created polygons that center at and are equidistant between each intersection. After this, we joined 311 point data to these intersection polygons, then joined ACS data by transferring the data from whichever ACS polygon had the largest overlap to each intersection polygon.
+
+There are a few issues with this structure; for one, the intersections polygons created vary greatly in size due to differing block lengths, especially near parks and the Schuylkill river. We attempted to alleviate this by clipping polygons based on the Schuylkill river. Second, ACS data will not be entirely exact, as there may be differing tracts that overlap each intersection polygon. Despite these concerns, this format is fairly accurate and proved to be easier to work with than other methods of data combination.
+
+![Intersection Polygons](./pics/ip_map.jpg){#fig:ip_map}
 
 ```{r 311_hin, eval=FALSE}
 
@@ -239,6 +287,10 @@ dat_bg <- dat_bg %>%
 
 ```
 
+## Exploratory Analysis
+
+### Summary Tables of Continuous Variables
+
 ```{r expl, results = "asis"}
 
 dat %>% st_drop_geometry() %>% 
@@ -246,16 +298,17 @@ dat %>% st_drop_geometry() %>%
     stargazer(type="html", title="Summary Table of Continuous Variables",   
           single.row = TRUE, digits=1)
 
-plot(dat$Car ,dat$crsh_c)
 
+dat1 <- dat %>% st_drop_geometry() %>% filter(m311>3 & hin==1) #high mobility cases and in the hin
+dat2 <- dat %>% st_drop_geometry() %>% filter(m311<=3 & hin==1) #low mobility cases and in the hin
+dat3 <- dat %>% st_drop_geometry() %>% filter(m311>3 & hin==0) #high mobility cases and not in the hin
 
-dat1 <- filter(dat, m311>3 & hin==1) #high mobility cases and in the hin
-dat2 <- filter(dat, m311<=3 & hin==1) #low mobility cases and in the hin
-dat3 <- filter(dat, m311>3 & hin==0) #high mobility cases and not in the hin
-
-dat1 %>% summarise(across(where(is.numeric), ~ mean(.x, na.rm = TRUE)))
-dat2 %>% summarise(across(where(is.numeric), ~ mean(.x, na.rm = TRUE)))
-dat3 %>% summarise(across(where(is.numeric), ~ mean(.x, na.rm = TRUE)))
+dat1 %>% summarise(across(where(is.numeric), ~ mean(.x, na.rm = TRUE))) %>% kable(caption="High Mobility Cases in the HIN") %>%
+  kable_styling("striped", full_width = F) %>% scroll_box(width = "1000px", height = "150px")
+dat2 %>% summarise(across(where(is.numeric), ~ mean(.x, na.rm = TRUE))) %>% kable(caption="Low Mobility Cases in the HIN") %>%
+  kable_styling("striped", full_width = F) %>% scroll_box(width = "1000px", height = "150px")
+dat3 %>% summarise(across(where(is.numeric), ~ mean(.x, na.rm = TRUE))) %>% kable(caption="High Mobility Cases NOT in the HIN") %>%
+  kable_styling("striped", full_width = F) %>% scroll_box(width = "1000px", height = "150px")
 
 
 # HIN_dat <- filter(dat, hin == 1)
@@ -269,19 +322,19 @@ dat3 %>% summarise(across(where(is.numeric), ~ mean(.x, na.rm = TRUE)))
 
 ```
 
-# II. Correlation Tests
+# III. Correlation Tests
 
-```{r corr}
+
+```{r corr0}
 
 numericVars <-
   select_if(dat %>% st_drop_geometry(), is.numeric) %>%
   select(Join_Count, all311, m311, hin, hin_c, crsh_c, fatal, fatal_c, inj, inj_c, pop, starts_with("PCT")) %>%
   na.omit()
 
-numericVars_bg <-
-  select_if(dat_bg %>% st_drop_geometry(), is.numeric) %>%
-  select(Join_Count, all311, m311, hin, hin_c, crsh_c, fatal, fatal_c, inj, inj_c, pop, starts_with("PCT")) %>%
-  na.omit()
+```
+
+```{r corr, fig.width=10,fig.height=11}
 
 ggcorrplot(  #correlation plot
           round(cor(numericVars), 1),
@@ -290,11 +343,14 @@ ggcorrplot(  #correlation plot
           lab = TRUE,
           colors = c("#08519c", "white", "#FA342A"),
           type="lower",
-          insig = "blank") +
+          insig = "blank",
+          ) +
           labs(title = "Correlations of Demographic Data, HIN Data, and 311 Data",
-               subtitle = "Intersection Polygons, Philadelphia, PA")
+               subtitle = "Intersection Polygons, Philadelphia, PA") 
 
 ```
+
+As we can see from the correlation plot, there are m
 
 ```{r stepwise}
 
@@ -322,7 +378,7 @@ anova(hin_test, test="Chisq")
 Using our test model, we 
 Based on AIC values, it appears that mobility-related 311 cases do not improve the model particularly 
 
-# III. Binary & Multinomial? Logit
+# IV. Binary & Multinomial? Logit
 
 ```{r binomial_logit}
 
@@ -334,11 +390,6 @@ hist(dat$logm311)
 ## High Injury Networks
 
 ```{r hin_bl, results = "asis"}
-
-cor.test(dat$maj_wht,dat$maj_blk)
-
-cor.test(dat$PCT_car, dat$PCT_trn)
-cor.test(dat$PCT_bik, dat$PCT_wlk)
 
 #our honed model
 hinMod1 <- glm(hin ~ med_rent + maj_blk + PCT_car + PCT_bik + PCT_own + m311,
@@ -357,6 +408,10 @@ hinMod3 <- glm(hin ~ crsh_c + inj_c + fatal_c,
                data=dat %>% st_drop_geometry(),
                family="binomial" (link="logit"))
 
+hinModb <- glm(hin ~ crsh_c + inj_c + fatal_c,
+               data=dat_bg %>% st_drop_geometry(),
+               family="binomial" (link="logit"))
+
 stargazer(hinMod1, hinMod2, hinMod3, 
           type="html", title="High-Injury Network Intersections",   
           column.labels = c("Model 1", "Model 2"),
@@ -369,6 +424,8 @@ data.frame(100*(exp(coef(hinMod1)))-1) %>%
 
 ## Low Reporting of Mobility Cases
 
+These models predict for intersections that have mobility case reporting of 3 or fewer. 
+
 ```{r low_311_bl, results = "asis"}
 
 # our honed model
@@ -376,6 +433,10 @@ l311Mod1 <- glm(lm311 ~ med_rent + maj_blk + PCT_car + PCT_bik + PCT_own + PCT_p
                data=dat %>% st_drop_geometry(),
                family="binomial" (link="logit"))
 
+
+l311Modb <- glm(lm311 ~ med_rent + maj_blk + PCT_car + PCT_bik + PCT_own + PCT_pov,
+               data=dat_bg %>% st_drop_geometry(),
+               family="binomial" (link="logit"))
 #model based on backwards stepwise
 l311Mod2 <- glm(formula = lm311 ~ mdn_inc + med_rent + workers + PCT_f + 
     PCT_blk + maj_blk + PCT_hsp + PCT_trn + PCT_bik + PCT_wlk + 
@@ -506,3 +567,30 @@ data.frame(100*(exp(coef(gapMod1)))-1) %>%
 
 
 ```
+
+# V. Conclusion
+
+
+
+
+
+
+
+
+
+
+
+## Sources
+
+City of Philadelphia. (2022a). OpenDataPhilly. OpenDataPhilly. https://www.opendataphilly.org/.
+
+City of Philadelphia. (2022b). Vision Zero Philadelphia. Vision Zero. http://visionzerophl.com/.
+
+O’Brien, D. T. (2018). The urban commons: How data and technology can rebuild our communities. Harvard University Press.
+
+O’Brien, D. T., Gordon, E., & Baldwin, J. (2014). Caring about the community, counteracting disorder: 311 reports of public issues as expressions of territoriality. Journal of Environmental Psychology, 40, 320–330. https://doi.org/10.1016/j.jenvp.2014.08.003.
+
+Pennsylvania Department of Transportation. (2022). Pennsylvania Crash Information Tool. Pennsylvania Department of Transportation. https://crashinfo.penndot.gov/PCIT/welcome.html. 
+
+U.S. Census Bureau. (2010-2019). American Community Survey 5-year Estimates.
+
