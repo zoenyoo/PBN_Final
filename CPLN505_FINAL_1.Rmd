@@ -1,0 +1,596 @@
+---
+title: "Planning by Numbers Final: Safety-as-a-Service"
+author: "Micah Epstein & Zoe Yoo"
+date: "4/3/2022"
+output: 
+  html_document:
+    toc: yes
+    toc_float: yes
+    code_folding: hide
+---
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+
+#install.packages("corrplot")
+
+
+library(dplyr);library(ggplot2);library(Hmisc);library(stargazer); library(htmlTable);library(kableExtra);library (gmodels);library(MASS);library(vcd);library(gridExtra);library(showtext);library(xtable);library(car);library(sf);library(sfnetworks); library(tidycensus);library(tidygraph);library(ggcorrplot);library(mlogit);library(AER);library(Hmisc); library(corrplot)
+
+
+options(scipen=0)
+
+setwd("G:/My Drive/GrSchool/CPLN 505 Planning by Numbers/PBN_Final")
+
+palette <- c("#10142A", "#47E9B9", "#F55D60", "#71EA48", "#C148EA", "#EAC148" )
+viridisPalette <- c("#440154", "#73D055", "#F55D60", "#238A8D", "#FDE725")
+#palette5 <- c("#324376", "#586ba4", "#f5dd90", "#ee964b", "#f95738")
+palette4 <- c("#324376", "#586ba4", "#ee964b", "#f95738")
+palette5 <- c("#FFFDFC", "#FFD5C8", "#FFC6B5", "#FF8061", "#F95738")
+palette2 <- c("#324376", "#f95738")
+```
+
+# I. Introduction
+
+## Towards Understanding the Gap Between Reported Traffic Conditions and Actual Traffic Injuries
+
+For our final project, we wanted to examine how and whether 311 cases, and specifically mobility-related 311 cases, could be a useful predictor of a city's high-injury network. We use Philadelphia as our test city, as there is already a comprehensive high-injury network (HIN) defined and released by the city that we were able to easily analyze. High-injury networks are generally defined as streets that pose higher risk for accidents and injuries to occur, across all modes of transportation. Some cities discern high-injury networks for each mode, such as varying HINs for pedestrian or cyclist injuries, but Philadelphia's is meant to be comprehensive for all modes. According to the City of Philadelphia's Vision Zero Action Plan for 2025, 80% of injuries occur on just 12% of city streets; Philadelphia's high-injury network was formed around data on crash-related injuries and fatalities. 
+
+Our original idea for this project was to create a high-injury network for a city that doesn’t have one yet (Pittsburgh), and then compare it to qualitative (311) and demographic data to understand the value of citizen reporting and the injury burden on certain groups. However, we found that both defining and analyzing a HIN for a new city would not be achievable within the time frame, and moved to instead applying the project's initial idea for 311-related and demographic analysis to Philadelphia's already-established network. 
+
+**Lack of 311 calls suggest a low attachment to place: “Higher attachment with the space was associated with a greater motivation to enforce local social norms and benefit the broader community.” [1]** **ADD MORE ABT OBRIEN STUDY HERE**
+
+We define mobility-related 311 cases as those that relate to street conditions.
+
+```{r}
+
+df <- tibble(
+  mobility = c("Abandoned Vehicle",
+                              "Complaint (Streets)",
+                              "Dangerous Sidewalk",
+                              "Line Striping",
+                              "Other (Streets)",
+                              "Right of Way Unit",
+                              "Right of Way",
+                              "Salting",
+                              "Stop Sign Repair",
+                              "Street Defect",
+                              "Street Paving",
+                              "Street Trees",
+                              "Traffic (Other)",
+                              "Traffic Signal Emergency"))
+
+
+kable(df,
+      caption="311 Cases Classified as Mobility Cases")
+```
+
+In this study, we explore the correlations between demographic data, 311 cases, and the presence of high-injury networks, and develop predictive models for metrics around these networks.
+
+
+# II. Data Preparation and Exploratory Analysis
+
+## Data
+
+To examine demographic data, we utilize 2019 American Community Survey 5-Year estimates for census tracts. 311 Data is also pulled from 2019.
+
+```{r acs, eval=FALSE}
+
+#ONLY NEED TO RUN THIS BLOCK IF RE-DOING ACS DATA
+
+get_acs_csv <- function(yr1, variableList, nameList) {
+  
+  acs1 <- get_acs(geography = "tract",
+                   year = yr1,
+                   variables = variableList,
+                   geometry = TRUE,
+                   state  = "PA",
+                   county = "Philadelphia",
+                   output = "wide"
+  )
+  
+  acs_full <- acs1 %>% dplyr:: select(!ends_with("M")) #include this line to remove margins of error
+  names(acs_full) <- c("GEOID","NAME", nameList,"geometry")
+  #acs_full <- acs_full[order(acs_full$GEOID),]
+  #write.csv(acs_full, file=paste(deparse(substitute(variableList)), yr1,"-",yr2, ".csv")) #include this line to export a csv
+  return(acs_full)
+}
+
+#use this line to look at acs variables
+#variables19_5 <- load_variables(year = 2019,dataset = "acs5")
+
+
+variableList <- c("B01001_001", #total population
+              "B01001_002", #total male
+              "B01001_026", #total female
+              "B02001_002", #white alone
+              "B02001_003", #black alone
+              "B02001_004", #AmIn/AlNative alone
+              "B02001_005", #Asian alone
+              "B02001_006", #Native hawaiian/PI alone
+              "B02001_007", #some other race alone
+              "B02001_008", #two plus races
+              "B03003_003", #total Hispanic or Latino
+              "B05009_001", #under 18 years B05009_001 for 2010, B09001_001 for 2019
+              "B15001_001", #18 years + B15001_001 for 2010, B09021_001 for 2019
+              "B11003_001", #families with children under 18
+              "B08301_001", #workers
+              "B08301_002", #means of transportation to work: car
+              "B08301_010", #means of transportation to work: public transit
+              "B08301_018", #means of transportation to work: bicycle
+              "B08301_019", #means of transportation to work: walked
+              "B08301_021", #means of transportation to work: wfh
+              "B19013_001", #median income
+              "B17001_002", #Income in the past 12 months below poverty level
+              "B17001_031", #Income in the past 12 months at or above poverty level
+              "B25064_001", #median gross rent
+              "B25003_002", #owner occupied
+              "B25003_003" #renter occupied
+              )
+
+nameList <- c("pop",
+                "male",
+                "fem",
+                "white",
+                "black",
+                "native_am",
+                "asian",
+                "nh_pi",
+                "other",
+                "multi",
+                "hisp_lat",
+                "Under_18",
+                "Above_18",
+                "fam_child",
+                "workers",
+                "Car",
+                "Transit",
+                "Bicycle",
+                "Walking",
+                "WFH",
+                "mdn_inc",
+                "blw_pov",
+                "abv_pov",
+                "med_rent",
+              "own",
+              "rent")
+
+acs_data <- get_acs_csv(2019,variableList, nameList)
+# add percentages
+acs_data <- acs_data %>% 
+  mutate(PCT_m = male/pop,
+         PCT_f = fem/pop,
+         PCT_wht = white/pop,
+         PCT_blk = black/pop,
+         PCT_na = native_am/pop,
+         PCT_asn = asian/pop,
+         PCT_pi = nh_pi/pop,
+         PCT_oth = other/pop,
+         PCT_mlt = multi/pop,
+         PCT_hsp = hisp_lat/pop,
+         PCT_fam = Under_18/pop,
+         PCT_car = Car/workers,
+         PCT_trn = Transit/workers,
+         PCT_bik = Bicycle/workers,
+         PCT_wlk = Walking/workers,
+         PCT_wfh = WFH/workers,
+         PCT_pov = blw_pov/pop,
+         PCT_own = own/pop,
+         PCT_rent = rent/pop,
+         maj_wht = if_else(PCT_wht > 0.50, 1, 0),
+         maj_blk = if_else(PCT_blk > 0.50, 1, 0))
+
+acs_data <- st_transform(acs_data,crs=4326)
+
+#this line writes the data to a shapefile
+st_write(acs_data,"./data/acs_bg.shp", driver="ESRI Shapefile", append=FALSE)
+
+```
+
+## Spatial Structure
+
+Because we need to combine 311 data, which is point data, ACS data, which is formatted in polygons, and HIN and street data, which is made up of lines (that cross many ACS polygons), we had to consider the best way to integrate both forms. We decided to evaluate HINs through street intersections; to transform the street network into polygons, we created polygons that center at and are equidistant between each intersection. After this, we joined 311 point data to these intersection polygons, then joined ACS data by transferring the data from whichever ACS polygon had the largest overlap to each intersection polygon.
+
+There are a few issues with this structure; for one, the intersections polygons created vary greatly in size due to differing block lengths, especially near parks and the Schuylkill river. We attempted to alleviate this by clipping polygons based on the Schuylkill river. Second, ACS data will not be entirely exact, as there may be differing tracts that overlap each intersection polygon. Despite these concerns, this format is fairly accurate and proved to be easier to work with than other methods of data combination.
+
+![Intersection Polygons](./pics/ip_map.jpg){#fig:ip_map}
+
+```{r 311_hin, eval=FALSE}
+
+#ONLY NEED TO RUN THIS BLOCK IF RE-DOING ACS DATA
+
+#setwd("G:/My Drive/GrSchool/CPLN 505 Planning by Numbers/PBN_Final")
+
+all311 <- read_sf("./data/311_2019_allSelected.shp")
+
+m311 <- all311 %>% filter(service_na %in%
+                            c("Abandoned Vehicle",
+                              "Complaint (Streets)",
+                              "Dangerous Sidewalk",
+                              "Line Striping",
+                              "Other (Streets)",
+                              "Right of Way Unit",
+                              "Right of Way",
+                              "Salting",
+                              "Stop Sign Repair",
+                              "Street Defect",
+                              "Street Paving",
+                              "Street Trees",
+                              "Traffic (Other)",
+                              "Traffic Signal Emergency"))
+
+st_write(m311,"./data/m311.shp", driver="Esri Shapefile", append=FALSE)
+
+hin <- read_sf("./data/high_injury_network_2020.shp")
+streets <- read_sf("./data/CompleteStreets.shp")
+ip <- read_sf("./data/intersection_polygons_clip.shp")
+
+crash <- read_sf("./data/COLLISION_CRASH_2016_2020.shp")
+crash_fatal <- crash %>% filter(FATAL_COUN > 0)
+crash_injury <- crash %>% filter(INJURY_COU > 0)
+
+ip2 <- ip %>% 
+  mutate(all311 = lengths(st_intersects(.,all311)),
+         m311 = lengths(st_intersects(.,m311)),
+         hin_c=lengths(st_intersects(.,hin)),
+         hin = if_else(hin_c > 0, 1,0),
+         crsh_c=lengths(st_intersects(.,crash)),
+         fatal =if_else(lengths(st_intersects(.,crash_fatal)) > 0, 1, 0),
+         fatal_c =lengths(st_intersects(.,crash_fatal)),
+         inj = if_else(lengths(st_intersects(.,crash_injury)) > 0, 1,0),
+         inj_c = lengths(st_intersects(.,crash_injury))
+         )
+st_write(ip2,"./data/ip.shp", driver="ESRI Shapefile", append=FALSE)
+
+#ip <- st_join(ip,streets,join=st_intersects)
+#this line joins polygons to acs data, but takes too long so just do this via spatial join in GIS
+#ip <- st_join(ip,acs_data,join=st_intersects, largest=TRUE)
+
+#write.csv(ip_join, file="./data/ip_join.csv")
+
+```
+
+
+```{r prep}
+
+dat <- read_sf("./data/ip_acs_join.shp")
+
+dat <- select(dat, -c(TARGET_FID, Id, Input_FID, OBJECTID, NODE_ID))
+
+dat <- dat %>% 
+  mutate(lm311 = if_else(m311 < 4, 1, 0),
+         logm311 = log(m311),
+         gap = if_else(m311<4 & hin==1, 1,0)
+         )
+
+dat_bg <- read_sf("./data/ip_acs_join_bg.shp")
+
+dat_bg <- select(dat_bg, -c(TARGET_FID, Id, Input_FID, OBJECTID, NODE_ID))
+
+dat_bg <- dat_bg %>% 
+  mutate(lm311 = if_else(m311 < 4, 1, 0),
+         logm311 = log(m311),
+         gap = if_else(m311<4 & hin==1, 1,0)
+         )
+
+#only need these if mapping
+# hin <- read_sf("https://github.com/zoenyoo/PBN_Final/raw/main/data/hin.geojson")
+# streets <- read_sf("https://github.com/zoenyoo/PBN_Final/raw/main/data/CompleteStreets.geojson")
+# ip <- read_sf("https://github.com/zoenyoo/PBN_Final/raw/main/data/intersection_polygons_clip.geojson")
+# m311 <- read_sf("https://github.com/zoenyoo/PBN_Final/raw/main/data/m311.geojson")
+
+# ggplot() +
+#   geom_point(data = m311, aes(x = lon, y = lat), alpha = .05)
+# 
+# ggplot()+
+#   geom_sf(data=dat, show.legend = NA, color = palette5[5], size=0.25)
+
+
+```
+
+## Exploratory Analysis
+
+### Summary Tables of Continuous Variables
+
+```{r expl, results = "asis"}
+
+dat %>% st_drop_geometry() %>% 
+    select_if(., is.numeric) %>% 
+    stargazer(type="html", title="Summary Table of Continuous Variables",   
+          single.row = TRUE, digits=1)
+
+
+dat1 <- dat %>% st_drop_geometry() %>% filter(m311>3 & hin==1) #high mobility cases and in the hin
+dat2 <- dat %>% st_drop_geometry() %>% filter(m311<=3 & hin==1) #low mobility cases and in the hin
+dat3 <- dat %>% st_drop_geometry() %>% filter(m311>3 & hin==0) #high mobility cases and not in the hin
+
+dat1 %>% summarise(across(where(is.numeric), ~ mean(.x, na.rm = TRUE))) %>% kable(caption="High Mobility Cases in the HIN") %>%
+  kable_styling("striped", full_width = F) %>% scroll_box(width = "1000px", height = "150px")
+dat2 %>% summarise(across(where(is.numeric), ~ mean(.x, na.rm = TRUE))) %>% kable(caption="Low Mobility Cases in the HIN") %>%
+  kable_styling("striped", full_width = F) %>% scroll_box(width = "1000px", height = "150px")
+dat3 %>% summarise(across(where(is.numeric), ~ mean(.x, na.rm = TRUE))) %>% kable(caption="High Mobility Cases NOT in the HIN") %>%
+  kable_styling("striped", full_width = F) %>% scroll_box(width = "1000px", height = "150px")
+
+
+# HIN_dat <- filter(dat, hin == 1)
+# mcase_dat <- filter(dat, m311 > 3)
+# HIN_d <- density(HIN_dat$PCT_own)
+# mcase_d <- density(mcase_dat$PCT_own)
+# acs_d <- density(dat$PCT_own, na.rm=TRUE)
+# plot(HIN_d, ylim=c(0,7))
+# plot(mcase_d, ylim=c(0,7))
+# plot(acs_d, ylim=c(0,7))
+
+```
+
+# III. Correlation Tests
+
+
+```{r corr0}
+
+numericVars <-
+  select_if(dat %>% st_drop_geometry(), is.numeric) %>%
+  select(Join_Count, all311, m311, hin, hin_c, crsh_c, fatal, fatal_c, inj, inj_c, pop, starts_with("PCT")) %>%
+  na.omit()
+
+```
+
+```{r corr, fig.width=10,fig.height=11}
+
+ggcorrplot(  #correlation plot
+          round(cor(numericVars), 1),
+          p.mat = cor_pmat(numericVars),
+          show.diag = TRUE,
+          lab = TRUE,
+          colors = c("#08519c", "white", "#FA342A"),
+          type="lower",
+          insig = "blank",
+          ) +
+          labs(title = "Correlations of Demographic Data, HIN Data, and 311 Data",
+               subtitle = "Intersection Polygons, Philadelphia, PA") 
+
+```
+
+As we can see from the correlation plot, there are m
+
+```{r stepwise}
+
+#backward stepwise regression
+hin_test <- glm(hin ~ pop + mdn_inc + med_rent + workers + PCT_f + PCT_wht + maj_wht + PCT_blk + maj_blk + PCT_asn + PCT_na + PCT_pi + PCT_oth + PCT_mlt + PCT_hsp + PCT_car + PCT_trn + PCT_bik + PCT_wlk + PCT_wfh + PCT_own + PCT_pov + PCT_fam + all311 + m311,
+            data = dat %>% st_drop_geometry(),
+            family="binomial" (link="logit"))
+
+lm311_test <- glm(lm311 ~ pop + mdn_inc + med_rent + workers + PCT_f + PCT_wht + maj_wht + PCT_blk + maj_blk + PCT_asn + PCT_na + PCT_pi + PCT_oth + PCT_mlt + PCT_hsp + PCT_car + PCT_trn + PCT_bik + PCT_wlk + PCT_wfh + PCT_own + PCT_pov + PCT_fam,
+            data = dat %>% st_drop_geometry(),
+            family="binomial" (link="logit"))
+
+# check this for na values
+gap_test <- glm(lm311 ~ pop + mdn_inc + med_rent + workers + PCT_f + PCT_wht + maj_wht + PCT_blk + maj_blk + PCT_asn + PCT_na + PCT_pi + PCT_oth + PCT_mlt + PCT_hsp + PCT_car + PCT_trn + PCT_bik + PCT_wlk + PCT_wfh + PCT_own + PCT_pov + PCT_fam,
+            data = dat %>% st_drop_geometry() %>% filter(hin==1),
+            family="binomial" (link="logit"))
+
+drop1(hin_test, test="Chisq")
+
+#step(gap_test, direction="backward")
+#step(hin_test, direction="backward")
+
+anova(hin_test, test="Chisq")
+```
+Using our test model, we 
+Based on AIC values, it appears that mobility-related 311 cases do not improve the model particularly 
+
+# IV. Binary & Multinomial? Logit
+
+```{r binomial_logit}
+
+hist(dat$logm311)
+
+
+```
+
+## High Injury Networks
+
+```{r hin_bl, results = "asis"}
+
+#our honed model
+hinMod1 <- glm(hin ~ med_rent + maj_blk + PCT_car + PCT_bik + PCT_own + m311,
+               data=dat %>% st_drop_geometry(),
+               family="binomial" (link="logit"))
+
+#model based on backwards stepwise
+hinMod2 <- glm(hin ~ mdn_inc + med_rent + PCT_f + PCT_blk + PCT_asn + 
+    PCT_oth + PCT_hsp + PCT_car + PCT_trn + PCT_bik + PCT_wfh + 
+    PCT_own + PCT_fam + all311 + m311,
+               data=dat %>% st_drop_geometry(),
+               family="binomial" (link="logit"))
+
+#model just using crash and injury/fatal data
+hinMod3 <- glm(hin ~ crsh_c + inj_c + fatal_c,
+               data=dat %>% st_drop_geometry(),
+               family="binomial" (link="logit"))
+
+hinModb <- glm(hin ~ crsh_c + inj_c + fatal_c,
+               data=dat_bg %>% st_drop_geometry(),
+               family="binomial" (link="logit"))
+
+stargazer(hinMod1, hinMod2, hinMod3, 
+          type="html", title="High-Injury Network Intersections",   
+          column.labels = c("Model 1", "Model 2"),
+          single.row = TRUE, digits=2)
+
+data.frame(100*(exp(coef(hinMod1)))-1) %>% 
+  kable()
+
+```
+
+## Low Reporting of Mobility Cases
+
+These models predict for intersections that have mobility case reporting of 3 or fewer. 
+
+```{r low_311_bl, results = "asis"}
+
+# our honed model
+l311Mod1 <- glm(lm311 ~ med_rent + maj_blk + PCT_car + PCT_bik + PCT_own + PCT_pov,
+               data=dat %>% st_drop_geometry(),
+               family="binomial" (link="logit"))
+
+
+l311Modb <- glm(lm311 ~ med_rent + maj_blk + PCT_car + PCT_bik + PCT_own + PCT_pov,
+               data=dat_bg %>% st_drop_geometry(),
+               family="binomial" (link="logit"))
+#model based on backwards stepwise
+l311Mod2 <- glm(formula = lm311 ~ mdn_inc + med_rent + workers + PCT_f + 
+    PCT_blk + maj_blk + PCT_hsp + PCT_trn + PCT_bik + PCT_wlk + 
+    PCT_wfh + PCT_own + PCT_pov + PCT_fam, family = binomial(link = "logit"), 
+    data = dat %>% st_drop_geometry())
+
+stargazer(l311Mod1, l311Mod2, 
+          type="html", title="Low Mobility Case-Reporting Intersections",   
+          column.labels = c("Model 1", "Model 2"),
+          single.row = TRUE, digits=2)
+data.frame(100*(exp(coef(l311Mod1)))-1) %>% 
+  kable()
+
+```
+
+## "Gap" Intersections: Low Mobility-Related 311 Reporting and HIN
+
+First, we create a new dataset that consists of all intersections on the high injury network, with a binary variable denoting if that intersection has above average or below average mobility case reporting. We use three mobility cases as a breaking point; thus, intersections that are on the high injury network with below three mobility cases are marked as being a gap intersection.
+
+```{r}
+
+gap_dat <- filter(dat, hin == 1)
+
+gap_dat$gap <- 0
+gap_dat$gap[gap_dat$m311 <= 3 ] <- 1 
+
+```
+
+The variables that I think might predict gaps in reporting are as follows:    
+1. Majority Black binary (maj_blk)    
+2. Percent of homeowners (PCT_own)    
+3. Percent drive to work (PCT_car)    
+4. Percent below poverty line (PCT_pov)   
+
+Before we create a model with these variables, we look for multicollinearity using a correlation chart. To do this we create a dataset with only those variables (as well as the dependent gap variable).
+
+```{r}
+
+varsKeep <- c("gap","maj_blk" , "PCT_own", "PCT_car","PCT_pov")
+corr_dat<-dat[ , which(names(dat) %in% varsKeep)]
+
+corr_dat <- select_if(corr_dat %>% st_drop_geometry(), is.numeric)
+
+M = cor(corr_dat)
+corrplot.mixed(M, tl.pos = 'lt', tl.col = 'black', assign.col = "black", number.cex = 0.5)
+
+```
+
+There is some correlation between percent poverty and percent homeowner, as well as between percent drive to work and percent homeowner but it is not large enough (>0.5) to consider dropping either variable.
+
+Now we will use a backwards step method to arrive at the leanest model from this initial set of independent variables. 
+
+```{r}
+step ( glm ( gap ~ PCT_car + PCT_pov + PCT_own + maj_blk, data=dat, family = binomial), direction = "backward")
+
+```
+The backwards step recommends dropping majority black as an independent variable, because the AIC of that model is lower when it is included as a variable. 
+
+```{r}
+gap_mod <- glm(formula = gap ~ PCT_car + PCT_pov + PCT_own, family = binomial, 
+    data = dat)
+
+summary(gap_mod)
+
+```
+
+All of our coefficients are statistically significant. Great! Before we interpret these coefficients, lets evaluate the accuracy of this model.
+
+```{r}
+pred <- as.data.frame(fitted(gap_mod))
+pred <- rename(pred, "prob" = "fitted(gap_mod)")
+pred <- mutate(pred, "binary" = ifelse(prob < 0.5, 0, 1))
+dat$gap_binary <- pred$binary
+
+SuccesfulPredictions <-sum(dat$gap == 1 & dat$gap_binary == 1)
+AccuracyRate <- (sum(dat$gap == 1 & dat$gap_binary == 1) + sum(dat$gap == 0 & dat$gap_binary == 0)) / nrow(dat)
+SuccesfulPredictions
+AccuracyRate
+```
+
+We get an accuracy rate of 85%, which is okay (not bad, but not great), but it is important to note that this model is not able to successfully predict any gap intersections. We can still interpret the coefficients, but there is still significant room for improvement in this model.
+
+### Interpreting gap coefficients
+
+```{r}
+100 * (exp(coef(gap_mod))-1)
+```
+
+Based on these coefficients, we can say the following:
+1. A 1% increase in those who drive to work in the census tract is associated with a 24% increase in the likelihood of an intersection being a gap.    
+2. A 1% increase in people living in poverty in the census tract is associated with a 117% increase in the likelihood of an intersection being a gap. Wow!   
+3. A 1% increase in homeownership in the census tract is associated with a 100% decrease in the likelihood of an intersection being a gap.
+
+These are striking results. They reinforce the findings of O'Brien et. al. that attachment to place, here measured by home ownership, has a significant bearing on 311 accuracy. We can also see that poverty, which could also be used as a measure of disnvestment and perhaps lack of trust, has a huge impact on 311 accuracy. Finally, as is expected, driving as a commute mode has a moderate but still large impact on 311 accuracy. This makes intuitive sense, as drivers spend less time at given intersections and are insulated from some of the specific quality concerns associated with streets. 
+
+Of course, as mentioned above, this model has significant room for improvement. The selected variables and size of data resulted in a model that was not able to succesfully predict a single gap. Conducting this analysis at a broader scale (across multiple cities, perhaps) could perhaps improve the model. Based on the research conducted by O'Brien et. al., other variables around civic engagement and trust would likely be useful, if quite difficult, to include. 
+
+
+```{r gap, results = "asis"}
+
+gapMod1 <- glm(lm311 ~ maj_blk + PCT_bik + PCT_own,
+               data=dat %>% st_drop_geometry() %>% filter(hin==1),
+               family="binomial" (link="logit"))
+summary(gapMod1)
+
+gapMod2 <- glm(formula = lm311 ~ pop + mdn_inc + med_rent + PCT_blk + maj_blk + PCT_na + 
+    PCT_pi + PCT_oth + PCT_hsp + PCT_car + PCT_bik + PCT_own + 
+    PCT_pov + PCT_fam, family = binomial(link = "logit"), 
+    data = dat %>% st_drop_geometry() %>% filter(hin==1))
+
+stargazer(gapMod1,
+          type="html", title="Gap Intersections",   
+          column.labels = c("Model 1", "Model 2"),
+          single.row = TRUE, digits=2)
+data.frame(100*(exp(coef(gapMod1)))-1) %>% 
+  kable()
+
+
+```
+
+## 
+
+```{r log311_bl, results = "asis"}
+
+# logm311Mod1 <- glm(logm311 ~ ,
+#                data=dat %>% st_drop_geometry(),
+#                family="binomial" (link="logit"))
+
+
+```
+
+# V. Conclusion
+
+
+
+
+
+
+
+
+
+
+
+## Sources
+
+City of Philadelphia. (2022a). OpenDataPhilly. OpenDataPhilly. https://www.opendataphilly.org/.
+
+City of Philadelphia. (2022b). Vision Zero Philadelphia. Vision Zero. http://visionzerophl.com/.
+
+O’Brien, D. T. (2018). The urban commons: How data and technology can rebuild our communities. Harvard University Press.
+
+O’Brien, D. T., Gordon, E., & Baldwin, J. (2014). Caring about the community, counteracting disorder: 311 reports of public issues as expressions of territoriality. Journal of Environmental Psychology, 40, 320–330. https://doi.org/10.1016/j.jenvp.2014.08.003.
+
+Pennsylvania Department of Transportation. (2022). Pennsylvania Crash Information Tool. Pennsylvania Department of Transportation. https://crashinfo.penndot.gov/PCIT/welcome.html. 
+
+U.S. Census Bureau. (2010-2019). American Community Survey 5-year Estimates.
+
