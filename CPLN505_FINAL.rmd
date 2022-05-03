@@ -12,7 +12,10 @@ output:
 ```{r setup, include=FALSE}
 knitr::opts_chunk$set(echo = TRUE)
 
-library(dplyr);library(ggplot2);library(Hmisc);library(stargazer); library(htmlTable);library(kableExtra);library (gmodels);library(MASS);library(vcd);library(gridExtra);library(showtext);library(xtable);library(car);library(sf);library(sfnetworks); library(tidycensus);library(tidygraph);library(ggcorrplot);library(mlogit);library(AER);library(Hmisc)
+#install.packages("corrplot")
+
+
+library(dplyr);library(ggplot2);library(Hmisc);library(stargazer); library(htmlTable);library(kableExtra);library (gmodels);library(MASS);library(vcd);library(gridExtra);library(showtext);library(xtable);library(car);library(sf);library(sfnetworks); library(tidycensus);library(tidygraph);library(ggcorrplot);library(mlogit);library(AER);library(Hmisc); library(corrplot)
 
 
 options(scipen=0)
@@ -369,6 +372,87 @@ data.frame(100*(exp(coef(l311Mod1)))-1) %>%
 ```
 
 ## "Gap" Intersections: Low Mobility-Related 311 Reporting and HIN
+
+First, we create a new dataset that consists of all intersections  on the high injury network, with a binary variable denoting if that intersection has above average or below average mobility case reporting.
+
+```{r}
+
+gap_dat <- filter(dat, hin == 1)
+
+gap_dat$gap <- 0
+gap_dat$gap[gap_dat$m311 <= 3 ] <- 1 
+
+```
+
+The variables that I think might predict gaps in reporting are as follows:    
+1. Majority Black binary (maj_blk)    
+2. Percent of homeowners (PCT_own)    
+3. Percent drive to work (PCT_car)    
+4. Percent below poverty line (PCT_pov)   
+
+Before we create a model with these variables, we look for multicollinearity using a correlation chart. To do this we create a dataset with only those variables (as well as the dependant gap variable)
+
+```{r}
+
+varsKeep <- c("gap","maj_blk" , "PCT_own", "PCT_car","PCT_pov")
+corr_dat<-dat[ , which(names(dat) %in% varsKeep)]
+
+corr_dat <- select_if(corr_dat %>% st_drop_geometry(), is.numeric)
+
+M = cor(corr_dat)
+corrplot.mixed(M, tl.pos = 'lt', tl.col = 'black', assign.col = "black", number.cex = 0.5)
+
+```
+
+There is some correlation between percent poverty and percent homeowner, as well as between percent drive to work and percent homeowner but it is not large enough (>0.5) to consider dropping either variable.
+
+Now we will use a backwards step method to arrive at the leanest model from this initial set of independent variables. 
+
+```{r}
+step ( glm ( gap ~ PCT_car + PCT_pov + PCT_own + maj_blk, data=dat, family = binomial), direction = "backward")
+
+```
+The backwards step recommends dropping majority black as an independent variable, because the AIC of that model is lower when it is included as a variable. 
+
+```{r}
+gap_mod <- glm(formula = gap ~ PCT_car + PCT_pov + PCT_own, family = binomial, 
+    data = dat)
+
+summary(gap_mod)
+
+```
+
+All of our coefficients are statistically significant. Great! Before we interpret these coefficients, lets evaluate the accuracy of this model.
+
+```{r}
+pred <- as.data.frame(fitted(gap_mod))
+pred <- rename(pred, "prob" = "fitted(gap_mod)")
+pred <- mutate(pred, "binary" = ifelse(prob < 0.5, 0, 1))
+dat$gap_binary <- pred$binary
+
+SuccesfulPredictions <-sum(dat$gap == 1 & dat$gap_binary == 1)
+AccuracyRate <- (sum(dat$gap == 1 & dat$gap_binary == 1) + sum(dat$gap == 0 & dat$gap_binary == 0)) / nrow(dat)
+SuccesfulPredictions
+AccuracyRate
+```
+
+We get an accuracy rate of 85%, which is okay (not bad, but not great), but it is important to note that this model is not able to successfully predict any gap intersections. We can still interpret the coefficients, but there is still significant room for improvement in this model.
+
+### Interpreting gap coefficients
+
+```{r}
+100 * (exp(coef(gap_mod))-1)
+```
+
+Based on these coefficients, we can say the following:
+1. A 1% increase in those who drive to work in the census tract is associated with a 24% increase in the likelihood of an intersection being a gap.    
+2. A 1% increase in people living in poverty in the census tract is associated with a 117% increase in the likelihood of an intersection being a gap. Wow!   
+3. A 1% increase in homeownership in the census tract is associated with a 100% decrease in the likelihood of an intersection being a gap.
+
+These are striking results. They reinforce the findings of O'Brien et. al. that attachment to place, here measured by home ownership, has a significant bearing on 311 accuracy. We can also see that poverty, which could also be used as a measure of disnvestment and perhaps lack of trust, has a huge impact on 311 accuracy. Finally, as is expected, driving as a commute mode has a moderate but still large impact on 311 accuracy. This makes intuitive sense, as drivers spend less time at given intersections and are insulated from some of the specific quality concerns associated with streets. 
+
+Of course, as mentioned above, this model has significant room for improvement. The selected variables and size of data resulted in a model that was not able to succesfully predict a single gap. Conducting this analysis at a broader scale (across multiple cities, perhaps) could perhaps improve the model. Based on the research conducted by O'Brien et. al., other variables around civic engagement and trust would likely be useful, if quite difficult, to include. 
+
 
 ```{r gap, results = "asis"}
 
