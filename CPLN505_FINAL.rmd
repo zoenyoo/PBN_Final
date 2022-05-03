@@ -464,14 +464,18 @@ We get an accuracy rate of 85%, which is okay (not bad, but not great), but it i
 100 * (exp(coef(gap_mod))-1)
 ```
 
-Based on these coefficients, we can say the following:
+Based on these coefficients, we can say the following:    
 1. A 1% increase in those who drive to work in the census tract is associated with a 24% increase in the likelihood of an intersection being a gap.    
 2. A 1% increase in people living in poverty in the census tract is associated with a 117% increase in the likelihood of an intersection being a gap. Wow!   
 3. A 1% increase in homeownership in the census tract is associated with a 100% decrease in the likelihood of an intersection being a gap.
 
-These are striking results. They reinforce the findings of O'Brien et. al. that attachment to place, here measured by home ownership, has a significant bearing on 311 accuracy. We can also see that poverty, which could also be used as a measure of disnvestment and perhaps lack of trust, has a huge impact on 311 accuracy. Finally, as is expected, driving as a commute mode has a moderate but still large impact on 311 accuracy. This makes intuitive sense, as drivers spend less time at given intersections and are insulated from some of the specific quality concerns associated with streets. 
+These are striking results, and have interesting implications in relationship to existing literature on 311 reporting. O'Brien et. al., using a mixed methods approach, say that "this paints a picture of custodianship, at least as measured through CRM (311) reports, as a pro-social act intended to provide benefit to oneself and others" and that "The effectiveness of the CRM (311) system in promoting neighborhood maintenance may rely primarily on goodwill for the neighborhood". [1] With this in mind, we see a negative association between driving to commute, and poverty rates, on pro-social behaviors like custodianship and neighborhood goodwill, as well as a positive association between home ownership and these behaviors. There is already a wealth of research proving the benefits of home ownership [2] and the negative implications of driving [3], while the negative implications of poverty are intuitive. However, in utilizing 311 data and ACS data, we can begin to understand the relationship between civic participation and more closely studied factors such as commute mode choice, housing, and poverty. 
 
-Of course, as mentioned above, this model has significant room for improvement. The selected variables and size of data resulted in a model that was not able to succesfully predict a single gap. Conducting this analysis at a broader scale (across multiple cities, perhaps) could perhaps improve the model. Based on the research conducted by O'Brien et. al., other variables around civic engagement and trust would likely be useful, if quite difficult, to include. 
+Of course, as mentioned above, this model has significant room for improvement. The selected variables and size of data resulted in a model that was not able to succesfully predict a single gap. Conducting this analysis at a broader scale (across multiple cities, perhaps) would likely improve the model. There are also complex social considerations at play. O'Brien et. al. also found that "those who perceived their neighborhood as more cohesive in fact reported fewer public issues." suggesting that cohesion (perhaps using regularity of block parties, if that data is available, or comparing new residents to long-time residents) should be accounted for and could add significant nuance to the analysis. 
+
+[1] O'Brien, Daniel Tumminelli, Eric Gordon, and Jessica Baldwin. “Caring about the Community, Counteracting Disorder: 311 Reports of Public Issues as Expressions of Territoriality.” Journal of Environmental Psychology 40 (2014): 320–30. https://doi.org/10.1016/j.jenvp.2014.08.003. 
+[2] Coulson, N. Edward, and Herman Li. "Measuring the external benefits of homeownership." Journal of Urban Economics 77 (2013): 57-67.
+[3] Conkle, Ann, and Catherine West. "Psychology on the Road." APS Observer 21, no. 6 (2008).
 
 
 ```{r gap, results = "asis"}
