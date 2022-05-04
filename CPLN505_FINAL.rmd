@@ -465,7 +465,7 @@ data.frame(100*(exp(coef(l311Mod1)))-1) %>%
   kable()
 ```
 
-For low mobility-related cases, we include a refined model (Model 1) and a model that includes all variables suggested by backwards stepwise regression. Though the AIC value is higher for Model 1, all variables included are significant highly significant. For our refined model, we found that low mobility-related311 reporting is 78% MORE LIKELY in majority black tracts; both factors are visualized in Figure 7. 
+For low mobility-related cases, we include a refined model (Model 1) and a model that includes all variables suggested by backwards stepwise regression. Though the AIC value is higher for Model 1, all variables included are significant highly significant. For our refined model, we found that low mobility-related 311 reporting is 78% MORE LIKELY in majority black tracts; both factors are visualized in Figure 7. 
 
 ![Figure 7. Mobility-Related Cases and Majority Black Census Tracts](./pics/mcase_map.png){#fig:mcase_map}
 
@@ -511,7 +511,7 @@ Now we will use a backwards step method to arrive at the leanest model from this
 step ( glm ( gap ~ PCT_car + PCT_pov + PCT_own + maj_blk, data=dat, family = binomial), direction = "backward")
 
 ```
-The backwards step recommends dropping majority black as an independent variable, because the AIC of that model is lower when it is included as a variable. 
+The backwards step recommends dropping majority Black as an independent variable, because the AIC of that model is lower when it is included as a variable. 
 
 ```{r}
 gap_mod <- glm(formula = gap ~ PCT_car + PCT_pov + PCT_own, family = binomial, 
@@ -551,29 +551,6 @@ Based on these coefficients, we can say the following:
 These are striking results, and have interesting implications in relationship to existing literature on 311 reporting. O'Brien et. al., using a mixed methods approach, say that "this paints a picture of custodianship, at least as measured through CRM (311) reports, as a pro-social act intended to provide benefit to oneself and others" and that "The effectiveness of the CRM (311) system in promoting neighborhood maintenance may rely primarily on goodwill for the neighborhood". [O'Brien] With this in mind, we see a negative association between driving to commute, and poverty rates, on pro-social behaviors like custodianship and neighborhood goodwill, as well as a positive association between home ownership and these behaviors. There is already a wealth of research proving the benefits of home ownership [Coulson] and the negative implications of driving [Conkle], while the negative implications of poverty are intuitive. However, in utilizing 311 data and ACS data, we can begin to understand the relationship between civic participation and more closely studied factors such as commute mode choice, housing, and poverty. 
 
 Of course, as mentioned above, this model has significant room for improvement. The selected variables and size of data resulted in a model that was not able to succesfully predict a single gap. Conducting this analysis at a broader scale (across multiple cities, perhaps) would likely improve the model. There are also complex social considerations at play. O'Brien et. al. also found that "those who perceived their neighborhood as more cohesive in fact reported fewer public issues." suggesting that cohesion (perhaps using regularity of block parties, if that data is available, or comparing new residents to long-time residents) should be accounted for and could add significant nuance to the analysis. 
-
-
-```{r gap, results = "asis"}
-
-gapMod1 <- glm(lm311 ~ maj_blk + PCT_bik + PCT_own,
-               data=dat %>% st_drop_geometry() %>% filter(hin==1),
-               family="binomial" (link="logit"))
-summary(gapMod1)
-
-gapMod2 <- glm(formula = lm311 ~ pop + mdn_inc + med_rent + PCT_blk + maj_blk + PCT_na + 
-    PCT_pi + PCT_oth + PCT_hsp + PCT_car + PCT_bik + PCT_own + 
-    PCT_pov + PCT_fam, family = binomial(link = "logit"), 
-    data = dat %>% st_drop_geometry() %>% filter(hin==1))
-
-stargazer(gapMod1,
-          type="html", title="Table 7. Gap Intersections",   
-          column.labels = c("Model 1", "Model 2"),
-          single.row = TRUE, digits=2)
-data.frame(100*(exp(coef(gapMod1)))-1) %>% 
-  kable()
-
-
-```
 
 # V. Conclusion
 
