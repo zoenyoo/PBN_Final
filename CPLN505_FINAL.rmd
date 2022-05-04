@@ -291,7 +291,7 @@ dat_bg <- dat_bg %>%
 
 ### Summary Tables of Continuous Variables
 
-
+We use summary statistics to get a basic idea of three varying cases: intersections with high mobility cases that are in the HIN, intersections with low mobility cases in the HIN, and intersections with high mobility cases that are not in the HIN. Even with these tables, it is clear that there is some variation; Table 4 illustrates averages for a few variables of interest.
 
 ```{r expl, results = "asis"}
 
@@ -317,6 +317,9 @@ dat3 %>% summarise(across(where(is.numeric), ~ mean(.x, na.rm = TRUE))) %>% kabl
 # plot(acs_d, ylim=c(0,7))
 
 ```
+
+![Table 4.](./pics/m_table.jpg){#fig:m_table}
+
 
 # III. Correlation Tests
 
@@ -392,8 +395,7 @@ drop1(hin_test, test="Chisq")
 anova(hin_test, test="Chisq")
 ```
 
-Using our test model, we 
-Based on AIC values, it appears that mobility-related 311 cases do not improve the model particularly 
+Based on AIC values, it appears that mobility-related 311 cases do not improve the model particularly; however, we still include them to get an idea of how mobility-related 311 cases are related. 
 
 
 ## High Injury Networks
@@ -420,7 +422,7 @@ hinMod3 <- glm(hin ~ crsh_c + inj_c + fatal_c,
                family="binomial" (link="logit"))
 
 stargazer(hinMod1, hinMod2, hinMod3, 
-          type="html", title="Table 4. High-Injury Network Intersections",   
+          type="html", title="Table 5. High-Injury Network Intersections",   
           column.labels = c("Model 1", "Model 2", "Model 3"),
           single.row = TRUE, digits=2)
 
@@ -429,7 +431,7 @@ data.frame(100*(exp(coef(hinMod1)))-1) %>%
 
 ```
 
-We develop three models that are shown in Table 4: Model 2 is the model using most variables suggested by backwards stepwise regression, and Model 3 uses just crash-related data. Model 1 is our most refined model using *just* demographic variables, both binary and continuous, and a dummy variable for mobility-related 311 cases. As shown by the AIC, Model 3 is the most useful model for predicting the HIN, which is clear due to the fact that the Philadelphia HIN is based around crash data. To contrast, Model 2 is concentrated around specific variables of high significance that we were interested in. For example, as Figure 6 illustrates, our model examines the relationship between the percentage of black residents and presence of the High Injury Network. Based on this model, high injury intersections are 110% more likely to be in majority black tracts.
+We develop three models that are shown in Table 5: Model 2 is the model using most variables suggested by backwards stepwise regression, and Model 3 uses just crash-related data. Model 1 is our most refined model using *just* demographic variables, both binary and continuous, and a dummy variable for mobility-related 311 cases. As shown by the AIC, Model 3 is the most useful model for predicting the HIN, which is clear due to the fact that the Philadelphia HIN is based around crash data. To contrast, Model 2 is concentrated around specific variables of high significance that we were interested in. For example, as Figure 6 illustrates, our model examines the relationship between the percentage of black residents and presence of the High Injury Network. Based on this model, high injury intersections are 110% more likely to be in majority black tracts.
 
 ![Figure 6. HIN and Majority Black Census Tracts](./pics/crash_map.png){#fig:crash_map}
 
@@ -452,7 +454,7 @@ l311Mod2 <- glm(formula = lm311 ~ mdn_inc + med_rent + workers + PCT_f +
     data = dat %>% st_drop_geometry())
 
 stargazer(l311Mod1, l311Mod2, 
-          type="html", title="Table 5. Low Mobility Case-Reporting Intersections",   
+          type="html", title="Table 6. Low Mobility Case-Reporting Intersections",   
           column.labels = c("Model 1", "Model 2"),
           single.row = TRUE, digits=2)
 data.frame(100*(exp(coef(l311Mod1)))-1) %>% 
@@ -560,7 +562,7 @@ gapMod2 <- glm(formula = lm311 ~ pop + mdn_inc + med_rent + PCT_blk + maj_blk + 
     data = dat %>% st_drop_geometry() %>% filter(hin==1))
 
 stargazer(gapMod1,
-          type="html", title="Table 5. Gap Intersections",   
+          type="html", title="Table 7. Gap Intersections",   
           column.labels = c("Model 1", "Model 2"),
           single.row = TRUE, digits=2)
 data.frame(100*(exp(coef(gapMod1)))-1) %>% 
