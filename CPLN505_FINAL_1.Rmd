@@ -37,8 +37,6 @@ For our final project, we wanted to examine how and whether 311 cases, and speci
 
 Our original idea for this project was to create a high-injury network for a city that doesn’t have one yet (Pittsburgh), and then compare it to qualitative (311) and demographic data to understand the value of citizen reporting and the injury burden on certain groups. However, we found that both defining and analyzing a HIN for a new city would not be achievable within the time frame, and moved to instead applying the project's initial idea for 311-related and demographic analysis to Philadelphia's already-established network. 
 
-**Lack of 311 calls suggest a low attachment to place: “Higher attachment with the space was associated with a greater motivation to enforce local social norms and benefit the broader community.” [1]** **ADD MORE ABT OBRIEN STUDY HERE**
-
 We define mobility-related 311 cases as those that relate to street conditions.
 
 ```{r}
@@ -63,6 +61,8 @@ df <- tibble(
 kable(df,
       caption="311 Cases Classified as Mobility Cases")
 ```
+
+\n
 
 In this study, we explore the correlations between demographic data, 311 cases, and the presence of high-injury networks, and develop predictive models for metrics around these networks.
 
@@ -192,7 +192,7 @@ Because we need to combine 311 data, which is point data, ACS data, which is for
 
 There are a few issues with this structure; for one, the intersections polygons created vary greatly in size due to differing block lengths, especially near parks and the Schuylkill river. We attempted to alleviate this by clipping polygons based on the Schuylkill river. Second, ACS data will not be entirely exact, as there may be differing tracts that overlap each intersection polygon. Despite these concerns, this format is fairly accurate and proved to be easier to work with than other methods of data combination.
 
-![Intersection Polygons](./pics/ip_map.jpg){#fig:ip_map}
+![Figure 1. Intersection Polygons](./pics/ip_map.jpg){#fig:ip_map}
 
 ```{r 311_hin, eval=FALSE}
 
@@ -291,23 +291,19 @@ dat_bg <- dat_bg %>%
 
 ### Summary Tables of Continuous Variables
 
+
+
 ```{r expl, results = "asis"}
-
-dat %>% st_drop_geometry() %>% 
-    select_if(., is.numeric) %>% 
-    stargazer(type="html", title="Summary Table of Continuous Variables",   
-          single.row = TRUE, digits=1)
-
 
 dat1 <- dat %>% st_drop_geometry() %>% filter(m311>3 & hin==1) #high mobility cases and in the hin
 dat2 <- dat %>% st_drop_geometry() %>% filter(m311<=3 & hin==1) #low mobility cases and in the hin
 dat3 <- dat %>% st_drop_geometry() %>% filter(m311>3 & hin==0) #high mobility cases and not in the hin
 
-dat1 %>% summarise(across(where(is.numeric), ~ mean(.x, na.rm = TRUE))) %>% kable(caption="High Mobility Cases in the HIN") %>%
+dat1 %>% summarise(across(where(is.numeric), ~ mean(.x, na.rm = TRUE))) %>% kable(caption="Table 1. High Mobility Cases in the HIN") %>%
   kable_styling("striped", full_width = F) %>% scroll_box(width = "1000px", height = "150px")
-dat2 %>% summarise(across(where(is.numeric), ~ mean(.x, na.rm = TRUE))) %>% kable(caption="Low Mobility Cases in the HIN") %>%
+dat2 %>% summarise(across(where(is.numeric), ~ mean(.x, na.rm = TRUE))) %>% kable(caption="Table 2. Low Mobility Cases in the HIN") %>%
   kable_styling("striped", full_width = F) %>% scroll_box(width = "1000px", height = "150px")
-dat3 %>% summarise(across(where(is.numeric), ~ mean(.x, na.rm = TRUE))) %>% kable(caption="High Mobility Cases NOT in the HIN") %>%
+dat3 %>% summarise(across(where(is.numeric), ~ mean(.x, na.rm = TRUE))) %>% kable(caption="Table 3. High Mobility Cases NOT in the HIN") %>%
   kable_styling("striped", full_width = F) %>% scroll_box(width = "1000px", height = "150px")
 
 
@@ -323,7 +319,6 @@ dat3 %>% summarise(across(where(is.numeric), ~ mean(.x, na.rm = TRUE))) %>% kabl
 ```
 
 # III. Correlation Tests
-
 
 ```{r corr0}
 
@@ -345,12 +340,33 @@ ggcorrplot(  #correlation plot
           type="lower",
           insig = "blank",
           ) +
-          labs(title = "Correlations of Demographic Data, HIN Data, and 311 Data",
+          labs(title = "Figure 2. Correlations of Demographic Data, HIN Data, and 311 Data",
                subtitle = "Intersection Polygons, Philadelphia, PA") 
 
 ```
 
-As we can see from the correlation plot, there are m
+To initially examine correlation, we utilize a correlation plot for all numeric variables. As we can see from the correlation plot, there are many demographic variables that exhibit correlation between each other, but when looking at correlation to the presence of the HIN, there are no strongly correlated variables outside of crash-related variables.
+
+## Graphic Comparisons
+
+
+
+![Figure 3. Income](./pics/income_plot.png){#fig:income_plot}
+
+Figure 3 compares the relative densities of high-injury intersections and intersections with a high number of mobility cases with median income (by census tract). The majority of high-injury intersections with a high number of mobility cases are at this peak around \$30,000 median income, and after a breaking point of about $50,000, 311 cases become more frequently reported as incomes rise.
+
+![Figure 4. Percentage White](./pics/white_plot.png){#fig:white_plot}
+
+Figure 4, which changes the x-axis to percentage of white residents, illustrates two points: one, High-injury intersections are much more concentrated in less-white census tracts. Two, we see that as the percentage of white residents per tract rises, reporting of (mobility-related) 311 cases become relatively more concentrated.
+
+![Figure 5. Homeownership](./pics/homeown_plot.png){#fig:homeown_plot}
+
+Figure 5 utilizes home ownership as a comparison. High-injury intersections do peak at slightly lower percentage rates of homeownership; additionally, similar to the past two comparisons, reporting of mobility cases becomes more dense than High-Injury Intersections as the rate of homeownership rises.
+
+
+# IV. Binary Logit Modeling
+
+To pick variables from the dataset that may be useful for our models, we use backward stepwise regression.
 
 ```{r stepwise}
 
@@ -375,19 +391,14 @@ drop1(hin_test, test="Chisq")
 
 anova(hin_test, test="Chisq")
 ```
+
 Using our test model, we 
 Based on AIC values, it appears that mobility-related 311 cases do not improve the model particularly 
 
-# IV. Binary & Multinomial? Logit
-
-```{r binomial_logit}
-
-hist(dat$logm311)
-
-
-```
 
 ## High Injury Networks
+
+Our first models predict whether an intersection is part of the High-Injury Network.
 
 ```{r hin_bl, results = "asis"}
 
@@ -408,19 +419,20 @@ hinMod3 <- glm(hin ~ crsh_c + inj_c + fatal_c,
                data=dat %>% st_drop_geometry(),
                family="binomial" (link="logit"))
 
-hinModb <- glm(hin ~ crsh_c + inj_c + fatal_c,
-               data=dat_bg %>% st_drop_geometry(),
-               family="binomial" (link="logit"))
-
 stargazer(hinMod1, hinMod2, hinMod3, 
-          type="html", title="High-Injury Network Intersections",   
-          column.labels = c("Model 1", "Model 2"),
+          type="html", title="Table 4. High-Injury Network Intersections",   
+          column.labels = c("Model 1", "Model 2", "Model 3"),
           single.row = TRUE, digits=2)
 
 data.frame(100*(exp(coef(hinMod1)))-1) %>% 
   kable()
 
 ```
+
+We develop three models that are shown in Table 4: Model 2 is the model using most variables suggested by backwards stepwise regression, and Model 3 uses just crash-related data. Model 1 is our most refined model using *just* demographic variables, both binary and continuous, and a dummy variable for mobility-related 311 cases. As shown by the AIC, Model 3 is the most useful model for predicting the HIN, which is clear due to the fact that the Philadelphia HIN is based around crash data. To contrast, Model 2 is concentrated around specific variables of high significance that we were interested in. For example, as Figure 6 illustrates, our model examines the relationship between the percentage of black residents and presence of the High Injury Network. Based on this model, high injury intersections are 110% more likely to be in majority black tracts.
+
+![Figure 6. HIN and Majority Black Census Tracts](./pics/crash_map.png){#fig:crash_map}
+
 
 ## Low Reporting of Mobility Cases
 
@@ -433,10 +445,6 @@ l311Mod1 <- glm(lm311 ~ med_rent + maj_blk + PCT_car + PCT_bik + PCT_own + PCT_p
                data=dat %>% st_drop_geometry(),
                family="binomial" (link="logit"))
 
-
-l311Modb <- glm(lm311 ~ med_rent + maj_blk + PCT_car + PCT_bik + PCT_own + PCT_pov,
-               data=dat_bg %>% st_drop_geometry(),
-               family="binomial" (link="logit"))
 #model based on backwards stepwise
 l311Mod2 <- glm(formula = lm311 ~ mdn_inc + med_rent + workers + PCT_f + 
     PCT_blk + maj_blk + PCT_hsp + PCT_trn + PCT_bik + PCT_wlk + 
@@ -444,13 +452,17 @@ l311Mod2 <- glm(formula = lm311 ~ mdn_inc + med_rent + workers + PCT_f +
     data = dat %>% st_drop_geometry())
 
 stargazer(l311Mod1, l311Mod2, 
-          type="html", title="Low Mobility Case-Reporting Intersections",   
+          type="html", title="Table 5. Low Mobility Case-Reporting Intersections",   
           column.labels = c("Model 1", "Model 2"),
           single.row = TRUE, digits=2)
 data.frame(100*(exp(coef(l311Mod1)))-1) %>% 
   kable()
 
 ```
+
+For low mobility-related cases, we include a refined model (Model 1) and a model that includes all variables suggested by backwards stepwise regression. Though the AIC value is higher for Model 1, all variables included are significant highly significant. For our refined model, we found that low mobility-related311 reporting is 78% MORE LIKELY in majority black tracts; both factors are visualized in Figure 7. 
+
+![Figure 7. Mobility-Related Cases and Majority Black Census Tracts](./pics/mcase_map.png){#fig:mcase_map}
 
 ## "Gap" Intersections: Low Mobility-Related 311 Reporting and HIN
 
@@ -473,7 +485,7 @@ The variables that I think might predict gaps in reporting are as follows:
 
 Before we create a model with these variables, we look for multicollinearity using a correlation chart. To do this we create a dataset with only those variables (as well as the dependent gap variable).
 
-```{r}
+```{r corrplot2, warning=FALSE}
 
 varsKeep <- c("gap","maj_blk" , "PCT_own", "PCT_car","PCT_pov")
 corr_dat<-dat[ , which(names(dat) %in% varsKeep)]
@@ -484,6 +496,7 @@ M = cor(corr_dat)
 corrplot.mixed(M, tl.pos = 'lt', tl.col = 'black', assign.col = "black", number.cex = 0.5)
 
 ```
+*Figure 8. Correlation Between Chosen Variables*
 
 There is some correlation between percent poverty and percent homeowner, as well as between percent drive to work and percent homeowner but it is not large enough (>0.5) to consider dropping either variable.
 
@@ -525,15 +538,14 @@ We get an accuracy rate of 85%, which is okay (not bad, but not great), but it i
 100 * (exp(coef(gap_mod))-1)
 ```
 
-Based on these coefficients, we can say the following:
+Based on these coefficients, we can say the following:    
 1. A 1% increase in those who drive to work in the census tract is associated with a 24% increase in the likelihood of an intersection being a gap.    
 2. A 1% increase in people living in poverty in the census tract is associated with a 117% increase in the likelihood of an intersection being a gap. Wow!   
 3. A 1% increase in homeownership in the census tract is associated with a 100% decrease in the likelihood of an intersection being a gap.
 
-These are striking results. They reinforce the findings of O'Brien et. al. that attachment to place, here measured by home ownership, has a significant bearing on 311 accuracy. We can also see that poverty, which could also be used as a measure of disnvestment and perhaps lack of trust, has a huge impact on 311 accuracy. Finally, as is expected, driving as a commute mode has a moderate but still large impact on 311 accuracy. This makes intuitive sense, as drivers spend less time at given intersections and are insulated from some of the specific quality concerns associated with streets. 
+These are striking results, and have interesting implications in relationship to existing literature on 311 reporting. O'Brien et. al., using a mixed methods approach, say that "this paints a picture of custodianship, at least as measured through CRM (311) reports, as a pro-social act intended to provide benefit to oneself and others" and that "The effectiveness of the CRM (311) system in promoting neighborhood maintenance may rely primarily on goodwill for the neighborhood". (O’Brien et al., 2014) With this in mind, we see a negative association between driving to commute, and poverty rates, on pro-social behaviors like custodianship and neighborhood goodwill, as well as a positive association between home ownership and these behaviors. There is already a wealth of research proving the benefits of home ownership (Coulson & Li, 2013) and the negative implications of driving (Conkle & West, 2008), while the negative implications of poverty are intuitive. However, in utilizing 311 data and ACS data, we can begin to understand the relationship between civic participation and more closely studied factors such as commute mode choice, housing, and poverty. 
 
-Of course, as mentioned above, this model has significant room for improvement. The selected variables and size of data resulted in a model that was not able to succesfully predict a single gap. Conducting this analysis at a broader scale (across multiple cities, perhaps) could perhaps improve the model. Based on the research conducted by O'Brien et. al., other variables around civic engagement and trust would likely be useful, if quite difficult, to include. 
-
+Of course, as mentioned above, this model has significant room for improvement. The selected variables and size of data resulted in a model that was not able to succesfully predict a single gap. Conducting this analysis at a broader scale (across multiple cities, perhaps) would likely improve the model. There are also complex social considerations at play. O'Brien et. al. also found that "those who perceived their neighborhood as more cohesive in fact reported fewer public issues," suggesting that cohesion (perhaps using regularity of block parties, if that data is available, or comparing new residents to long-time residents) should be accounted for and could add significant nuance to the analysis. 
 
 ```{r gap, results = "asis"}
 
@@ -548,7 +560,7 @@ gapMod2 <- glm(formula = lm311 ~ pop + mdn_inc + med_rent + PCT_blk + maj_blk + 
     data = dat %>% st_drop_geometry() %>% filter(hin==1))
 
 stargazer(gapMod1,
-          type="html", title="Gap Intersections",   
+          type="html", title="Table 5. Gap Intersections",   
           column.labels = c("Model 1", "Model 2"),
           single.row = TRUE, digits=2)
 data.frame(100*(exp(coef(gapMod1)))-1) %>% 
@@ -557,40 +569,29 @@ data.frame(100*(exp(coef(gapMod1)))-1) %>%
 
 ```
 
-## 
-
-```{r log311_bl, results = "asis"}
-
-# logm311Mod1 <- glm(logm311 ~ ,
-#                data=dat %>% st_drop_geometry(),
-#                family="binomial" (link="logit"))
-
-
-```
-
 # V. Conclusion
 
+Comparing models that we have developed based on demographic data to models based on injury variables, we cannot say that demographic data is an accurate predictor of the presence of High-Injury Network streets. However, our models, whether for High-Injury Network presence, low-mobility 311 cases, or gap intersections, do have a level of predictive power. Additionally, there are certainly interesting and clear patterns that become apparent when spatially and graphically examining the demographic distributions alongside the High-Injury Network. 
 
-
-
-
-
-
-
+Since Philadelphia's High-Injury Network is mainly based on vehicle crash data, including injuries and fatalities, we are basing the accuracy of our models on the trustworthiness of the city's data. The efficiacy of High-Injury Networks depends on their accuracy, but crash data is also often flawed; for instance, bicycle injuries and crashes are vastly underreported. This may signify a need to include wider variables outside of just injury data when developing HINs, or do further investigation to ensure that data is accurate. Furthermore, the fact that several variables, both binary and continuous, in our dataset are highly significant when predicting for the presence of High-Injury Networks indicates the importance of utilizing demographic data and 311 data, both in the development of HINs for other cities or when conducting analysis on where to prioritize transportation infrastructure investments.
 
 
 
 ## Sources
 
-City of Philadelphia. (2022a). OpenDataPhilly. OpenDataPhilly. https://www.opendataphilly.org/.
+City of Philadelphia. (2022a). OpenDataPhilly. OpenDataPhilly. https://www.opendataphilly.org/
 
-City of Philadelphia. (2022b). Vision Zero Philadelphia. Vision Zero. http://visionzerophl.com/.
+City of Philadelphia. (2022b). Vision Zero Philadelphia. Vision Zero. http://visionzerophl.com/
+
+Conkle, A., & West, C. (2008). Psychology on the Road. APS Observer, 21. https://www.psychologicalscience.org/observer/psychology-on-the-road
+
+Coulson, N. E., & Li, H. (2013). Measuring the external benefits of homeownership. Journal of Urban Economics, 77, 57–67. https://doi.org/10.1016/j.jue.2013.03.005
 
 O’Brien, D. T. (2018). The urban commons: How data and technology can rebuild our communities. Harvard University Press.
 
-O’Brien, D. T., Gordon, E., & Baldwin, J. (2014). Caring about the community, counteracting disorder: 311 reports of public issues as expressions of territoriality. Journal of Environmental Psychology, 40, 320–330. https://doi.org/10.1016/j.jenvp.2014.08.003.
+O’Brien, D. T., Gordon, E., & Baldwin, J. (2014). Caring about the community, counteracting disorder: 311 reports of public issues as expressions of territoriality. Journal of Environmental Psychology, 40, 320–330. https://doi.org/10.1016/j.jenvp.2014.08.003
 
-Pennsylvania Department of Transportation. (2022). Pennsylvania Crash Information Tool. Pennsylvania Department of Transportation. https://crashinfo.penndot.gov/PCIT/welcome.html. 
+Pennsylvania Department of Transportation. (2022). Pennsylvania Crash Information Tool. Pennsylvania Department of Transportation. https://crashinfo.penndot.gov/PCIT/welcome.html
 
 U.S. Census Bureau. (2010-2019). American Community Survey 5-year Estimates.
 
