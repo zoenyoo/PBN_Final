@@ -19,7 +19,7 @@ library(dplyr);library(ggplot2);library(Hmisc);library(stargazer); library(htmlT
 
 options(scipen=0)
 
-setwd("G:/My Drive/GrSchool/CPLN 505 Planning by Numbers/PBN_Final")
+#setwd("G:/My Drive/GrSchool/CPLN 505 Planning by Numbers/PBN_Final")
 
 palette <- c("#10142A", "#47E9B9", "#F55D60", "#71EA48", "#C148EA", "#EAC148" )
 viridisPalette <- c("#440154", "#73D055", "#F55D60", "#238A8D", "#FDE725")
@@ -473,7 +473,7 @@ The variables that I think might predict gaps in reporting are as follows:
 
 Before we create a model with these variables, we look for multicollinearity using a correlation chart. To do this we create a dataset with only those variables (as well as the dependent gap variable).
 
-```{r}
+```{r warning = FALSE}
 
 varsKeep <- c("gap","maj_blk" , "PCT_own", "PCT_car","PCT_pov")
 corr_dat<-dat[ , which(names(dat) %in% varsKeep)]
@@ -566,27 +566,19 @@ data.frame(100*(exp(coef(gapMod1)))-1) %>%
 
 # V. Conclusion
 
-These are striking results, and have interesting implications in relationship to existing literature on 311 reporting. O'Brien et. al., using a mixed methods approach, say that "this paints a picture of custodianship, at least as measured through CRM (311) reports, as a pro-social act intended to provide benefit to oneself and others" and that "The effectiveness of the CRM (311) system in promoting neighborhood maintenance may rely primarily on goodwill for the neighborhood". [1] With this in mind, we see a negative association between driving to commute, and poverty rates, on pro-social behaviors like custodianship and neighborhood goodwill, as well as a positive association between home ownership and these behaviors. There is already a wealth of research proving the benefits of home ownership [2] and the negative implications of driving [3], while the negative implications of poverty are intuitive. However, in utilizing 311 data and ACS data, we can begin to understand the relationship between civic participation and more closely studied factors such as commute mode choice, housing, and poverty. 
+These are striking results, and have interesting implications in relationship to existing literature on 311 reporting. O'Brien et. al., using a mixed methods approach, say that "this paints a picture of custodianship, at least as measured through CRM (311) reports, as a pro-social act intended to provide benefit to oneself and others" and that "The effectiveness of the CRM (311) system in promoting neighborhood maintenance may rely primarily on goodwill for the neighborhood". [O'Brien] With this in mind, we see a negative association between driving to commute, and poverty rates, on pro-social behaviors like custodianship and neighborhood goodwill, as well as a positive association between home ownership and these behaviors. There is already a wealth of research proving the benefits of home ownership [Coulson] and the negative implications of driving [Conkle], while the negative implications of poverty are intuitive. However, in utilizing 311 data and ACS data, we can begin to understand the relationship between civic participation and more closely studied factors such as commute mode choice, housing, and poverty. 
 
 Of course, as mentioned above, this model has significant room for improvement. The selected variables and size of data resulted in a model that was not able to succesfully predict a single gap. Conducting this analysis at a broader scale (across multiple cities, perhaps) would likely improve the model. There are also complex social considerations at play. O'Brien et. al. also found that "those who perceived their neighborhood as more cohesive in fact reported fewer public issues." suggesting that cohesion (perhaps using regularity of block parties, if that data is available, or comparing new residents to long-time residents) should be accounted for and could add significant nuance to the analysis. 
-
-[1] O'Brien, Daniel Tumminelli, Eric Gordon, and Jessica Baldwin. “Caring about the Community, Counteracting Disorder: 311 Reports of Public Issues as Expressions of Territoriality.” Journal of Environmental Psychology 40 (2014): 320–30. https://doi.org/10.1016/j.jenvp.2014.08.003. 
-[2] Coulson, N. Edward, and Herman Li. "Measuring the external benefits of homeownership." Journal of Urban Economics 77 (2013): 57-67.
-[3] Conkle, Ann, and Catherine West. "Psychology on the Road." APS Observer 21, no. 6 (2008).
-
-
-
-
-
-
-
-
 
 ## Sources
 
 City of Philadelphia. (2022a). OpenDataPhilly. OpenDataPhilly. https://www.opendataphilly.org/.
 
 City of Philadelphia. (2022b). Vision Zero Philadelphia. Vision Zero. http://visionzerophl.com/.
+
+Conkle, Ann, and Catherine West. "Psychology on the Road." APS Observer 21, no. 6 (2008).
+
+Coulson, N. Edward, and Herman Li. "Measuring the external benefits of homeownership." Journal of Urban Economics 77 (2013): 57-67.
 
 O’Brien, D. T. (2018). The urban commons: How data and technology can rebuild our communities. Harvard University Press.
 
