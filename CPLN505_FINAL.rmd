@@ -422,7 +422,6 @@ hinModb <- glm(hin ~ crsh_c + inj_c + fatal_c,
                family="binomial" (link="logit"))
 
 stargazer(hinMod1, hinMod2, hinMod3,
-          type="html", title="Table 4. High-Injury Network Intersections",
           type="html", title="Table 5. High-Injury Network Intersections",
           column.labels = c("Model 1", "Model 2", "Model 3"),
           single.row = TRUE, digits=2)
@@ -459,7 +458,6 @@ l311Mod2 <- glm(formula = lm311 ~ mdn_inc + med_rent + workers + PCT_f +
     data = dat %>% st_drop_geometry())
 
 stargazer(l311Mod1, l311Mod2,
-          type="html", title="Table 5. Low Mobility Case-Reporting Intersections",
           type="html", title="Table 6. Low Mobility Case-Reporting Intersections",
           column.labels = c("Model 1", "Model 2"),
           single.row = TRUE, digits=2)
@@ -568,7 +566,6 @@ gapMod2 <- glm(formula = lm311 ~ pop + mdn_inc + med_rent + PCT_blk + maj_blk + 
     data = dat %>% st_drop_geometry() %>% filter(hin==1))
 
 stargazer(gapMod1,
-          type="html", title="Table 5. Gap Intersections",   
           type="html", title="Table 7. Gap Intersections",   
           column.labels = c("Model 1", "Model 2"),
           single.row = TRUE, digits=2)
